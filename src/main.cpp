@@ -36,80 +36,157 @@ using namespace ns3;
 NS_LOG_COMPONENT_DEFINE ("SecondScriptExample");
 
 int
-main (int argc, char *argv[])
-{
+main(int argc, char *argv[]) {
     bool verbose = true;
-    uint32_t nCsma = 3;
+    uint32_t nGW = 100;
 
     CommandLine cmd;
-    cmd.AddValue ("nCsma", "Number of \"extra\" CSMA nodes/devices", nCsma);
-    cmd.AddValue ("verbose", "Tell echo applications to log if true", verbose);
+    cmd.AddValue("nCsma", "Number of \"extra\" CSMA nodes/devices", nGW);
+    cmd.AddValue("verbose", "Tell echo applications to log if true", verbose);
 
-    cmd.Parse (argc,argv);
+    cmd.Parse(argc, argv);
 
-    if (verbose)
-    {
-        LogComponentEnable ("UdpEchoClientApplication", LOG_LEVEL_INFO);
-        LogComponentEnable ("UdpEchoServerApplication", LOG_LEVEL_INFO);
+    if (verbose) {
+        LogComponentEnable("UdpEchoClientApplication", LOG_LEVEL_INFO);
+        LogComponentEnable("UdpEchoServerApplication", LOG_LEVEL_INFO);
     }
 
-    nCsma = nCsma == 0 ? 1 : nCsma;
+    nGW = nGW == 0 ? 1 : nGW;
 
-    NodeContainer p2pNodes;
-    p2pNodes.Create (2);
 
-    NodeContainer csmaNodes;
-    csmaNodes.Add (p2pNodes.Get (1));
-    csmaNodes.Create (nCsma);
+    NodeContainer gwNodes;
+    gwNodes.Create(nGW);
 
-    PointToPointHelper pointToPoint;
-    pointToPoint.SetDeviceAttribute ("DataRate", StringValue ("5Mbps"));
-    pointToPoint.SetChannelAttribute ("Delay", StringValue ("2ms"));
+    NodeContainer clientNodes;
+    clientNodes.Create(nGW);
 
-    NetDeviceContainer p2pDevices;
-    p2pDevices = pointToPoint.Install (p2pNodes);
+    NodeContainer servers;
+    servers.Create(3);
 
-    CsmaHelper csma;
-    csma.SetChannelAttribute ("DataRate", StringValue ("100Mbps"));
-    csma.SetChannelAttribute ("Delay", TimeValue (NanoSeconds (6560)));
+    Ptr<Node> cp = servers.Get(0);
+    Ptr<Node> pop = servers.Get(1);
+    Ptr<Node> router = servers.Get(2);
 
-    NetDeviceContainer csmaDevices;
-    csmaDevices = csma.Install (csmaNodes);
 
     InternetStackHelper stack;
-    stack.Install (p2pNodes.Get (0));
-    stack.Install (csmaNodes);
+    stack.Install(gwNodes);
+    stack.Install(clientNodes);
+    stack.Install(router);
+    stack.Install(cp);
+    stack.Install(pop);
 
-    Ipv4AddressHelper address;
-    address.SetBase ("10.1.1.0", "255.255.255.0");
-    Ipv4InterfaceContainer p2pInterfaces;
-    p2pInterfaces = address.Assign (p2pDevices);
+    //P2P configuration for LAN
+    PointToPointHelper pointToPointLan;
+    pointToPointLan.SetDeviceAttribute("DataRate", StringValue("100Mbps"));
+    pointToPointLan.SetChannelAttribute("Delay", StringValue("1ms"));
 
-    address.SetBase ("10.1.2.0", "255.255.255.0");
+    Ipv4AddressHelper addressLanScheme;
+    addressLanScheme.SetBase("192.168.0.0", "255.255.255.0");
+
+
+    //P2P configuration for ROUTER -> CP
+    PointToPointHelper pointToPointCP;
+    pointToPointCP.SetDeviceAttribute("DataRate", StringValue("2Gbps"));
+    pointToPointCP.SetChannelAttribute("Delay", StringValue("200ms"));
+
+    Ipv4AddressHelper addressP2P_Router_CP;
+    addressP2P_Router_CP.SetBase("192.168.1.0", "255.255.255.0");
+
+    NodeContainer cpRouterContainer;
+    cpRouterContainer.Add(cp);
+    cpRouterContainer.Add(router);
+
+    NetDeviceContainer routerCPDeviceContainer;
+    routerCPDeviceContainer = pointToPointCP.Install(cpRouterContainer);
+
+    Ipv4InterfaceContainer routerCp_add = addressP2P_Router_CP.Assign(routerCPDeviceContainer);
+
+
+
+
+    //P2P configuration for ROUTER -> POP
+    PointToPointHelper pointToPointPOP;
+    pointToPointPOP.SetDeviceAttribute("DataRate", StringValue("2Gbps"));
+    pointToPointPOP.SetChannelAttribute("Delay", StringValue("100ms"));
+
+    Ipv4AddressHelper addressP2P_Pop_Router;
+    addressP2P_Pop_Router.SetBase("192.168.2.0", "255.255.255.0");
+
+    NodeContainer popRouterContainer;
+    popRouterContainer.Add(pop);
+    popRouterContainer.Add(router);
+
+    NetDeviceContainer popRouterDeviceContainer;
+    routerCPDeviceContainer = pointToPointPOP.Install(popRouterContainer);
+
+    Ipv4InterfaceContainer popRouter_addr = addressP2P_Pop_Router.Assign(popRouterDeviceContainer);
+
+
+    //CSMA Configuration for GW => Router
+    CsmaHelper csmaHelper;
+    csmaHelper.SetChannelAttribute("DataRate", StringValue("100Mbps"));
+    csmaHelper.SetChannelAttribute("Delay", TimeValue(MilliSeconds(10)));
+
+    Ipv4AddressHelper wanAddressScheme;
+    wanAddressScheme.SetBase("10.0.0.0", "255.0.0.0");
+
+    //plug all the gw with the router
+
+    NodeContainer wanNodes;
+    wanNodes.Add(router);
+    wanNodes.Add(gwNodes);
+
+
+    NetDeviceContainer wanDevices;
+    wanDevices = csmaHelper.Install(wanNodes);
+
     Ipv4InterfaceContainer csmaInterfaces;
-    csmaInterfaces = address.Assign (csmaDevices);
+    csmaInterfaces = wanAddressScheme.Assign(wanDevices);
 
-    UdpEchoServerHelper echoServer (9);
 
-    ApplicationContainer serverApps = echoServer.Install (csmaNodes.Get (nCsma));
-    serverApps.Start (Seconds (1.0));
-    serverApps.Stop (Seconds (10.0));
+    Ipv4InterfaceContainer lanInterfaceContainers[nGW];
+    //now connect the peer to the gw
+    for (int i = 0; i < nGW; i++) {
+        NodeContainer lan;
+        lan.Add(clientNodes.Get(i));
+        lan.Add(gwNodes.Get(i));
 
-    UdpEchoClientHelper echoClient (csmaInterfaces.GetAddress (nCsma), 9);
-    echoClient.SetAttribute ("MaxPackets", UintegerValue (1));
-    echoClient.SetAttribute ("Interval", TimeValue (Seconds (1.0)));
-    echoClient.SetAttribute ("PacketSize", UintegerValue (1024));
 
-    ApplicationContainer clientApps = echoClient.Install (p2pNodes.Get (0));
-    clientApps.Start (Seconds (2.0));
-    clientApps.Stop (Seconds (10.0));
+        NetDeviceContainer lanDevices;
+        lanDevices = pointToPointLan.Install(lan);
 
-    Ipv4GlobalRoutingHelper::PopulateRoutingTables ();
 
-    pointToPoint.EnablePcapAll ("second");
-    csma.EnablePcap ("second", csmaDevices.Get (1), true);
+        lanInterfaceContainers[i] = addressLanScheme.Assign(lanDevices);
+    }
 
-    Simulator::Run ();
-    Simulator::Destroy ();
+
+    UdpEchoServerHelper echoServer(9);
+
+    ApplicationContainer serverApps = echoServer.Install(router);
+    serverApps.Start(Seconds(1.0));
+    serverApps.Stop(Seconds(100.0));
+
+    UdpEchoClientHelper echoClient(routerCp_add.GetAddress(1), 9);
+    echoClient.SetAttribute("MaxPackets", UintegerValue(9));
+    echoClient.SetAttribute("Interval", TimeValue(Seconds(1.0)));
+    echoClient.SetAttribute("PacketSize", UintegerValue(1024));
+
+    for (int i = 0; i < nGW; i++) {
+        ApplicationContainer clientApps = echoClient.Install(clientNodes.Get(0));
+        clientApps.Start(Seconds(2.0));
+        clientApps.Stop(Seconds(100.0));
+    }
+
+    Ipv4GlobalRoutingHelper::PopulateRoutingTables();
+
+
+
+    pointToPointCP.EnablePcapAll("CP");
+    pointToPointLan.EnablePcapAll("Lan");
+    pointToPointPOP.EnablePcapAll("POP");
+
+
+    Simulator::Run();
+    Simulator::Destroy();
     return 0;
 }
