@@ -21,7 +21,8 @@
 #include "ns3/point-to-point-module.h"
 #include "ns3/applications-module.h"
 #include "ns3/ipv4-global-routing-helper.h"
-
+#include "StreamingApplicationServer.h"
+#include <ns3/data-rate.h>
 // Default Network Topology
 //
 //       10.1.1.0
@@ -38,7 +39,7 @@ NS_LOG_COMPONENT_DEFINE ("SecondScriptExample");
 int
 main(int argc, char *argv[]) {
     bool verbose = true;
-    uint32_t nGW = 100;
+    uint32_t nGW = 2;
 
     CommandLine cmd;
     cmd.AddValue("nCsma", "Number of \"extra\" CSMA nodes/devices", nGW);
@@ -47,8 +48,8 @@ main(int argc, char *argv[]) {
     cmd.Parse(argc, argv);
 
     if (verbose) {
-        LogComponentEnable("UdpEchoClientApplication", LOG_LEVEL_INFO);
-        LogComponentEnable("UdpEchoServerApplication", LOG_LEVEL_INFO);
+        LogComponentEnable("OnOffApplication", LOG_LEVEL_INFO);
+        LogComponentEnable("PacketSink", LOG_LEVEL_INFO);
     }
 
     nGW = nGW == 0 ? 1 : nGW;
@@ -93,8 +94,9 @@ main(int argc, char *argv[]) {
     addressP2P_Router_CP.SetBase("192.168.1.0", "255.255.255.0");
 
     NodeContainer cpRouterContainer;
-    cpRouterContainer.Add(cp);
     cpRouterContainer.Add(router);
+    cpRouterContainer.Add(cp);
+
 
     NetDeviceContainer routerCPDeviceContainer;
     routerCPDeviceContainer = pointToPointCP.Install(cpRouterContainer);
@@ -154,25 +156,34 @@ main(int argc, char *argv[]) {
 
         NetDeviceContainer lanDevices;
         lanDevices = pointToPointLan.Install(lan);
-
-
         lanInterfaceContainers[i] = addressLanScheme.Assign(lanDevices);
     }
 
 
-    UdpEchoServerHelper echoServer(9);
+    uint16_t port = 50000;
 
-    ApplicationContainer serverApps = echoServer.Install(router);
-    serverApps.Start(Seconds(1.0));
-    serverApps.Stop(Seconds(100.0));
 
-    UdpEchoClientHelper echoClient(routerCp_add.GetAddress(1), 9);
-    echoClient.SetAttribute("MaxPackets", UintegerValue(9));
-    echoClient.SetAttribute("Interval", TimeValue(Seconds(1.0)));
-    echoClient.SetAttribute("PacketSize", UintegerValue(1024));
+    PacketSinkHelper sinkHelper ("ns3::TcpSocketFactory", Address (InetSocketAddress (Ipv4Address::GetAny (), port)));
+    ApplicationContainer sinkApp = sinkHelper.Install (cp);
+    sinkApp.Start (Seconds (1.0));
+    sinkApp.Stop (Seconds (100.0));
+
+
+
+
+
+    AddressValue remoteAddress
+            (InetSocketAddress (routerCp_add.GetAddress(1), port));
+    OnOffHelper clientHelper ("ns3::TcpSocketFactory", remoteAddress.Get());
+
+    clientHelper.SetConstantRate(DataRate ("100b/s"),10);
+
+
+
 
     for (int i = 0; i < nGW; i++) {
-        ApplicationContainer clientApps = echoClient.Install(clientNodes.Get(0));
+
+        ApplicationContainer clientApps = clientHelper .Install(clientNodes.Get(i));
         clientApps.Start(Seconds(2.0));
         clientApps.Stop(Seconds(100.0));
     }
