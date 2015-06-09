@@ -15,8 +15,9 @@
 #include <ns3/ipv4-address.h>
 #include "GwApplication.h"
 #include <ns3/tcp-socket-factory.h>
-#include <string>
-#include <sstream>
+#include <climits>
+#include <algorithm>
+
 
 using namespace ns3;
 
@@ -35,76 +36,86 @@ namespace ns3 {
         return tid;
     }
 
-    GwApplication::GwApplication() : m_socket(0) {
+    GwApplication::GwApplication() : m_socketClientAccept(0), m_configurationSocket(0), m_local(), m_signalingPOPAddr(),
+                                     m_signalingCPAddr(), m_configurationPOPAddr() {
 
     }
 
     GwApplication::~GwApplication() {
-        m_socket = 0;
+        m_socketClientAccept = 0;
+        m_configurationSocket = 0;
     }
 
-    void GwApplication::Setup(Address address) {
-        m_peer = address;
+    void GwApplication::Setup(InetSocketAddress local,
+                              InetSocketAddress signalingPOPAddr,
+                              InetSocketAddress signalingCPAddr,
+                              InetSocketAddress configurationPOPAddr) {
+        m_local = local;
+        m_signalingPOPAddr = signalingPOPAddr;
+        m_signalingCPAddr = signalingCPAddr;
+        m_configurationPOPAddr = configurationPOPAddr;
+
     }
 
 
-    void GwApplication::HandleRead(Ptr<Socket> socket) {
-        NS_LOG_FUNCTION (this);
+    void GwApplication::HandleClientDownloadQuery(Ptr<Socket> socket) {
+
         Ptr<Packet> data = socket->Recv();
         std::ostringstream buf;
         data->CopyData(&buf, 1024);
+        socket->Close();
 
-        char newUri[265];
-        handle_redirect_uri(buf.str().c_str(), newUri, sizeof(newUri));
-        Ptr<Packet> packet = Create<Packet>((const uint8_t *) newUri, strlen(newUri));
-        socket->Send(packet);
+
+        const std::string clientQuery = buf.str();
+
+        NS_LOG_FUNCTION (this << clientQuery);
+        const std::string resource = clientQuery.substr(0, clientQuery.find('\t'));
+
+        //if in pop, trigger download from pop, otherwise from CP and notify POP.
+        if (std::find(m_handlerResources.begin(), m_handlerResources.end(), resource) != m_handlerResources.end()) {
+            triggerDownloadFromPOP(clientQuery);
+        }
+        else {
+            triggerDownloadFromCP(clientQuery);
+            notifyPOP(resource);
+
+        }
 
 
     }
 
 
-    bool GwApplication::HandleConnectionRequest(Ptr<Socket> socket, const Address &from) {
+    bool GwApplication::HandleClientConnectionRequest(Ptr<Socket> socket, const Address &from) {
         NS_LOG_FUNCTION (this);
         return true;
     }
 
-    void GwApplication::HandleAccept(Ptr<Socket> socket, const Address &from) {
+    void GwApplication::HandleClientAccept(Ptr<Socket> socket, const Address &from) {
         NS_LOG_FUNCTION (this);
-        socket->SetRecvCallback(MakeCallback(&GwApplication::HandleRead, this));
+        socket->SetRecvCallback(MakeCallback(&GwApplication::HandleClientDownloadQuery, this));
 
     }
 
 
     void GwApplication::StartApplication(void) {
 
-
-        uint32_t ipTos = 0;
-        bool ipRecvTos = true;
-        uint32_t ipTtl = 0;
-        bool ipRecvTtl = true;
-
-
-        m_socket = Socket::CreateSocket(GetNode(), TcpSocketFactory::GetTypeId());
-
-
-        int status = m_socket->Bind(m_peer);
-        if (status != 0) {
-            exit(100);
-        }
-        status = m_socket->Listen();
-        if (status != 0) {
-            exit(200);
-        }
-
-
-        m_socket->SetAcceptCallback(
-                MakeCallback(&GwApplication::HandleConnectionRequest, this),
-                MakeCallback(&GwApplication::HandleAccept, this));
-
-
-        m_socket->SetCloseCallbacks(
+        // incoming connection from client
+        m_socketClientAccept = Socket::CreateSocket(GetNode(), TcpSocketFactory::GetTypeId());
+        m_socketClientAccept->Bind(m_local);
+        m_socketClientAccept->Listen();
+        m_socketClientAccept->SetAcceptCallback(
+                MakeCallback(&GwApplication::HandleClientConnectionRequest, this),
+                MakeCallback(&GwApplication::HandleClientAccept, this));
+        m_socketClientAccept->SetCloseCallbacks(
                 MakeCallback(&GwApplication::HandlePeerClose, this),
                 MakeCallback(&GwApplication::HandlePeerError, this));
+
+
+        Ptr<Socket> m_configurationSocket = Socket::CreateSocket(GetNode(), TcpSocketFactory::GetTypeId());
+        m_configurationSocket->Bind();
+        m_configurationSocket->Connect(m_configurationPOPAddr);
+        m_configurationSocket->SetRecvCallback(MakeCallback(&GwApplication::HandleUpdatedConfiguration, this));
+
 
         NS_LOG_FUNCTION (this << "callbacks registered");
     }
@@ -119,18 +130,47 @@ namespace ns3 {
 
 
     void GwApplication::StopApplication(void) {
-        m_socket->Close();
-    }
-
-    void GwApplication::RespondToClientRequest() {
-
-        char *const message = const_cast<char *>("abcd");
-        Ptr<Packet> packet = Create<Packet>((const uint8_t *) message, strlen(message));
-        m_socket->Send(packet);
-        Ptr<Packet> resp = m_socket->Recv();
-
-
+        m_socketClientAccept->Close();
     }
 
 
+    void GwApplication::triggerDownloadFromPOP(std::string const resource) {
+        NS_LOG_FUNCTION (this);
+        this->triggerDownload(m_signalingPOPAddr, resource);
+    }
+
+    void GwApplication::triggerDownloadFromCP(std::string const resource) {
+        NS_LOG_FUNCTION (this);
+        this->triggerDownload(m_signalingCPAddr, resource);
+    }
+
+    void GwApplication::triggerDownload(Address const target, std::string const resource) {
+        Ptr<Socket> socket = Socket::CreateSocket(GetNode(), TcpSocketFactory::GetTypeId());
+        socket->Bind();
+        socket->Connect(target);
+        Ptr<Packet> packet = Create<Packet>(reinterpret_cast<const uint8_t *>(resource.c_str()),
+                                            resource.length());
+        socket->Send(packet);
+        socket->Close();
+    }
+
+
+    void GwApplication::notifyPOP(std::string const resource) {
+        NS_LOG_FUNCTION (this);
+
+        Ptr<Packet> packet = Create<Packet>(reinterpret_cast<const uint8_t *>(resource.c_str()),
+                                            resource.length());
+        m_configurationSocket->Send(packet);
+
+
+    }
+
+    void GwApplication::HandleUpdatedConfiguration(Ptr<Socket> socket) {
+
+        Ptr<Packet> data = socket->Recv();
+        std::ostringstream ss;
+        data->CopyData(&ss, INT_MAX);
+
+
+    }
 }

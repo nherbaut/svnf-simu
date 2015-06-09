@@ -22,7 +22,7 @@
 #include "ns3/point-to-point-module.h"
 #include "ns3/applications-module.h"
 #include "ns3/command-line.h"
-#include "StreamingApplicationClient.h"
+#include "ClientApplication.h"
 #include "GwApplication.h"
 
 // Default Network Topology
@@ -51,16 +51,14 @@ main(int argc, char *argv[]) {
     cmd.Parse(argc, argv);
 
 
-        //LogComponentEnable("TcpSocketBase", LOG_LEVEL_INFO);
-        LogComponentEnable("SVNF", LOG_LEVEL_ALL);
-        LogComponentEnable("GwApplication", LOG_LEVEL_ALL);
-        LogComponentEnable("StreamingApplicationClient", LOG_LEVEL_ALL);
+    //LogComponentEnable("TcpSocketBase", LOG_LEVEL_INFO);
+    LogComponentEnable("SVNF", LOG_LEVEL_ALL);
+    LogComponentEnable("GwApplication", LOG_LEVEL_ALL);
+    LogComponentEnable("ClientApplication", LOG_LEVEL_ALL);
+    LogComponentEnable("CachingControllerApplication", LOG_LEVEL_ALL);
 
 
-
-
-
-    nGW = nGW == 0 ? 1 : nGW;
+    nGW = 1;
 
 
     NodeContainer gwNodes;
@@ -101,18 +99,17 @@ main(int argc, char *argv[]) {
     Ipv4AddressHelper addressP2P_Router_CP;
     addressP2P_Router_CP.SetBase("192.168.1.0", "255.255.255.0");
 
-    NodeContainer cpRouterContainer;
-    cpRouterContainer.Add(router);
-    cpRouterContainer.Add(cp);
+    NodeContainer routerCpContainer;
+    routerCpContainer.Add(router);
+    routerCpContainer.Add(cp);
 
 
     NetDeviceContainer routerCPDeviceContainer;
-    routerCPDeviceContainer = pointToPointCP.Install(cpRouterContainer);
-
-    Ipv4InterfaceContainer routerCp_add = addressP2P_Router_CP.Assign(routerCPDeviceContainer);
+    routerCPDeviceContainer = pointToPointCP.Install(routerCpContainer);
 
 
-
+    Ipv4InterfaceContainer routerCp_addrs = addressP2P_Router_CP.Assign(routerCPDeviceContainer);
+    const Ipv4Address cpIpV4Addr = routerCp_addrs.GetAddress(1);
 
     //P2P configuration for ROUTER -> POP
     PointToPointHelper pointToPointPOP;
@@ -123,13 +120,15 @@ main(int argc, char *argv[]) {
     addressP2P_Pop_Router.SetBase("192.168.2.0", "255.255.255.0");
 
     NodeContainer popRouterContainer;
-    popRouterContainer.Add(pop);
     popRouterContainer.Add(router);
+    popRouterContainer.Add(pop);
 
-    NetDeviceContainer popRouterDeviceContainer;
-    routerCPDeviceContainer = pointToPointPOP.Install(popRouterContainer);
 
-    Ipv4InterfaceContainer popRouter_addr = addressP2P_Pop_Router.Assign(popRouterDeviceContainer);
+    NetDeviceContainer routerPopDeviceContainer;
+    routerPopDeviceContainer = pointToPointPOP.Install(popRouterContainer);
+
+    Ipv4InterfaceContainer routerPop_addrs = addressP2P_Pop_Router.Assign(routerPopDeviceContainer);
+    const Ipv4Address popIpV4Addr = routerPop_addrs.GetAddress(1);
 
 
     //CSMA Configuration for GW => Router
@@ -175,7 +174,9 @@ main(int argc, char *argv[]) {
     // NOW THE APPLICATION PART
     //////////////////////////////////////////
 
-    uint16_t gwPort = 50000;
+    uint16_t signalingPort = 18080;
+    uint16_t configurationPort = 18081;
+    uint16_t dataSourcePort = 18082;
 
 
     for (int i = 0; i < nGW; i++) {
@@ -183,12 +184,18 @@ main(int argc, char *argv[]) {
 
 
         // GATEWAY
+        const Ipv4Address gwAddress = lanInterfaceContainers[i].GetAddress(1);
+        const Ipv4Address clientAddress = lanInterfaceContainers[i].GetAddress(0);
         //create the app
         Ptr<GwApplication> gwApp = CreateObject<GwApplication>();
         //create the soket to put in the app
 
-        //gwApp->Setup(InetSocketAddress(lanInterfaceContainers[i].GetAddress(1), gwPort));
-        gwApp->Setup(InetSocketAddress(lanInterfaceContainers[i].GetAddress(1), gwPort));
+
+        gwApp->Setup(InetSocketAddress(gwAddress, signalingPort),
+                     InetSocketAddress(cpIpV4Addr, signalingPort),
+                     InetSocketAddress(popIpV4Addr, signalingPort),
+                     InetSocketAddress(popIpV4Addr, configurationPort));
+
         //put the application in the node
         gwNodes.Get(i)->AddApplication(gwApp);
 
@@ -197,20 +204,19 @@ main(int argc, char *argv[]) {
         gwApp->SetStopTime(Seconds(20.));
 
 
-
-
-
-
         // CLIENT
+        //an application to trigger the download from a datasource
+        Ptr<labri::ClientApplication> clientApp = CreateObject<labri::ClientApplication>();
+        clientApp->Setup(InetSocketAddress(gwAddress, signalingPort),
 
-        Ptr<labri::StreamingApplicationClient> clientApp = CreateObject<labri::StreamingApplicationClient>();
-
-
-        clientApp->Setup(InetSocketAddress(lanInterfaceContainers[i].GetAddress(1), gwPort));
+                         InetSocketAddress(clientAddress, dataSourcePort));
 
         clientNodes.Get(i)->AddApplication(clientApp);
         clientApp->SetStartTime(Seconds(15));
         clientApp->SetStopTime(Seconds(20.));
+
+        PacketSinkHelper helper("ns3::TcpSocketFactory", InetSocketAddress(clientAddress, dataSourcePort));
+        helper.Install(clientNodes.Get(i));
 
     }
 

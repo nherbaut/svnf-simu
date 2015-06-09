@@ -15,5 +15,5 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -DNS3_LOG_ENABLE")
 
 include_directories(${NS3_INCLUDE_DIR})
 set(SOURCE_FILES ./src/main.cpp src/GwApplication.cc)
-add_executable(svnf_simu ${SOURCE_FILES} )
+add_executable(svnf_simu ${SOURCE_FILES} src/CachingControllerApplication.cpp src/CachingControllerApplication.h src/MD5.cpp src/MD5.h)
 target_link_libraries(svnf_simu ${NS3_LIBRARIES} pthread thread_db)

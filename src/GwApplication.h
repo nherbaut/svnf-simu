@@ -22,45 +22,43 @@ using namespace ns3;
 namespace ns3 {
 
 
-
-
-
-
     class GwApplication : public Application {
-
-
 
 
     public:
 
 
-
-
         GwApplication();
 
-        static TypeId GetTypeId (void);
+        static TypeId GetTypeId(void);
 
         virtual ~GwApplication();
 
-        virtual void Setup(Address address);
+
+        virtual void Setup(InetSocketAddress local,
+                           InetSocketAddress signalingPOPAddr,
+                           InetSocketAddress signalingCPAddr,
+                           InetSocketAddress configurationPOPAddr);
 
     private:
 
-        Ptr<Socket> m_socket;
-        Address m_peer;
+        Ptr<Socket> m_socketClientAccept;
+        Ptr<Socket> m_configurationSocket;
+        Address m_local;
+        Address m_signalingPOPAddr;
+        Address m_signalingCPAddr;
+        Address m_configurationPOPAddr;
 
-        void handle_redirect_uri(const char* in, char* out, const size_t max){
-
-            strcpy(out,"newRes");
-
-        }
+        std::list<std::string> m_handlerResources;
 
 
-        void HandleRead(Ptr<Socket> socket);
+        void HandleClientDownloadQuery(Ptr<Socket> socket);
 
-        bool HandleConnectionRequest(Ptr<Socket> socket, const Address &from);
+        bool HandleClientConnectionRequest(Ptr<Socket> socket, const Address &from);
 
-        void HandleAccept(Ptr<Socket> socket, const Address &from);
+        void HandleClientAccept(Ptr<Socket> socket, const Address &from);
+
+        void HandleCCConfigurationUpdate(Ptr<Socket> socket);
 
 
         virtual void StartApplication(void);
@@ -72,9 +70,16 @@ namespace ns3 {
 
         virtual void StopApplication(void);
 
-        void RespondToClientRequest();
 
+        void triggerDownloadFromPOP(std::string const resource);
 
+        void triggerDownloadFromCP(std::string const resource);
+
+        void notifyPOP(std::string const resource);
+
+        void triggerDownload(Address target, std::string const resource);
+
+        void HandleUpdatedConfiguration(Ptr<Socket> socket);
     };
 
 };
