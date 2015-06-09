@@ -37,7 +37,7 @@ namespace  labri {
 
     private:
         InetSocketAddress m_controlAddr;
-        std::vector<StreamingEvent> events;
+
 
 
         Ptr<Socket> m_controlSocket;
@@ -53,9 +53,9 @@ namespace  labri {
 
         void HandleStreamingRequest(Ptr<Socket> ptr);
 
-        void ScheduleTx(void);
+        void ScheduleTx(Ptr<Socket> clientSocket, unsigned long total,unsigned long packetSize);
 
-        void SendPacket(void);
+        void SendPacket(Ptr<Socket> clientSocket, unsigned long total,unsigned long packetSize);
     };
 }
 

@@ -15,6 +15,11 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -DNS3_LOG_ENABLE")
 
 
 include_directories(${NS3_INCLUDE_DIR} ${Boost_INCLUDE_DIRS})
-set(SOURCE_FILES ./src/main.cpp src/GwApplication.cc)
-add_executable(svnf_simu ${SOURCE_FILES} src/CachingControllerApplication.cpp src/CachingControllerApplication.h src/MD5.cpp src/MD5.h src/VideoDataSource.cpp src/VideoDataSource.h src/StreamingEvent.cpp src/StreamingEvent.h)
+set(SOURCE_FILES
+./src/main.cpp src/GwApplication.cc
+src/CachingControllerApplication.cpp
+src/MD5.cpp
+src/VideoDataSource.cpp
+)
+add_executable(svnf_simu ${SOURCE_FILES})
 target_link_libraries(svnf_simu ${NS3_LIBRARIES} pthread thread_db)

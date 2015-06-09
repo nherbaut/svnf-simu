@@ -73,34 +73,34 @@ namespace labri {
         const std::string clientPort = clientInetAdd.substr(clientInetAdd.find(':') + 1, clientInetAdd.length());
 
         NS_LOG_FUNCTION(this << "stream to" << clientIP << clientPort);
-        InetSocketAddress clientSinkAddress(clientIP.c_str(),boost::lexical_cast<uint16_t>(clientPort));
-        Ptr<Socket> clientSinkSocket= Socket::CreateSocket(GetNode(), TcpSocketFactory::GetTypeId());
+        InetSocketAddress clientSinkAddress(clientIP.c_str(), boost::lexical_cast<uint16_t>(clientPort));
+        Ptr<Socket> clientSinkSocket = Socket::CreateSocket(GetNode(), TcpSocketFactory::GetTypeId());
         clientSinkSocket->Bind();
         clientSinkSocket->Connect(clientSinkAddress);
-        SendPacket(clientSinkSocket,1024*20);
-        ptr->Close();
+        SendPacket(clientSinkSocket, 1024 * 20, 1024);
+
 
     }
 
     void
-    VideoDataSource::SendPacket (Ptr<Socket> clientSocket, unsigned long total)
-    {
-        const unsigned long packetSize=1024;
-        Ptr<Packet> packet = Create<Packet> (packetSize);
-        clientSocket->Send (packet);
-        total-=packetSize;
-        if (total>0)
-        {
-            ScheduleTx (clientSocket,total);
+    VideoDataSource::SendPacket(Ptr<Socket> clientSocket, unsigned long total, unsigned long packetSize) {
+        NS_LOG_FUNCTION(this);
+        Ptr<Packet> packet = Create<Packet>(packetSize);
+        clientSocket->Send(packet);
+        total -= packetSize;
+        if (total > 0) {
+            ScheduleTx(clientSocket, total, packetSize);
+        }
+        else {
+            clientSocket->Close();
         }
     }
 
     void
-    VideoDataSource::ScheduleTx (Ptr<Socket> clientSocket, unsigned long total)
-    {
+    VideoDataSource::ScheduleTx(Ptr<Socket> clientSocket, unsigned long total, unsigned long packetSize) {
 
-            Time tNext (Seconds (2));
-            Simulator::Schedule (tNext, &VideoDataSource::SendPacket, this);
+        Time tNext(Seconds(1));
+        Simulator::Schedule(tNext, &VideoDataSource::SendPacket, this,clientSocket, total, packetSize);
 
     }
 }

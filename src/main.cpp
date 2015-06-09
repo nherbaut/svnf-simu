@@ -58,6 +58,7 @@ main(int argc, char *argv[]) {
     LogComponentEnable("ClientApplication", LOG_LEVEL_ALL);
     LogComponentEnable("CachingControllerApplication", LOG_LEVEL_ALL);
     LogComponentEnable("VideoDataSource", LOG_LEVEL_ALL);
+    LogComponentEnable("PacketSink", LOG_LEVEL_ALL);
 
 
     nGW = 1;
