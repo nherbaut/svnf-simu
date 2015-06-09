@@ -14,15 +14,17 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#include "ns3/core-module.h"
+
+
 #include "ns3/network-module.h"
 #include "ns3/csma-module.h"
 #include "ns3/internet-module.h"
 #include "ns3/point-to-point-module.h"
 #include "ns3/applications-module.h"
-#include "ns3/ipv4-global-routing-helper.h"
-#include "StreamingApplicationServer.h"
-#include <ns3/data-rate.h>
+#include "ns3/command-line.h"
+#include "StreamingApplicationClient.h"
+#include "GwApplication.h"
+
 // Default Network Topology
 //
 //       10.1.1.0
@@ -34,7 +36,8 @@
 
 using namespace ns3;
 
-NS_LOG_COMPONENT_DEFINE ("SecondScriptExample");
+
+NS_LOG_COMPONENT_DEFINE ("SVNF");
 
 int
 main(int argc, char *argv[]) {
@@ -47,10 +50,15 @@ main(int argc, char *argv[]) {
 
     cmd.Parse(argc, argv);
 
-    if (verbose) {
-        LogComponentEnable("OnOffApplication", LOG_LEVEL_INFO);
-        LogComponentEnable("PacketSink", LOG_LEVEL_INFO);
-    }
+
+        //LogComponentEnable("TcpSocketBase", LOG_LEVEL_INFO);
+        LogComponentEnable("SVNF", LOG_LEVEL_ALL);
+        LogComponentEnable("GwApplication", LOG_LEVEL_ALL);
+        LogComponentEnable("StreamingApplicationClient", LOG_LEVEL_ALL);
+
+
+
+
 
     nGW = nGW == 0 ? 1 : nGW;
 
@@ -82,7 +90,7 @@ main(int argc, char *argv[]) {
     pointToPointLan.SetChannelAttribute("Delay", StringValue("1ms"));
 
     Ipv4AddressHelper addressLanScheme;
-    addressLanScheme.SetBase("192.168.0.0", "255.255.255.0");
+    addressLanScheme.SetBase("192.168.0.0", "255.255.0.0");
 
 
     //P2P configuration for ROUTER -> CP
@@ -109,7 +117,7 @@ main(int argc, char *argv[]) {
     //P2P configuration for ROUTER -> POP
     PointToPointHelper pointToPointPOP;
     pointToPointPOP.SetDeviceAttribute("DataRate", StringValue("2Gbps"));
-    pointToPointPOP.SetChannelAttribute("Delay", StringValue("100ms"));
+    pointToPointPOP.SetChannelAttribute("Delay", StringValue("10ms"));
 
     Ipv4AddressHelper addressP2P_Pop_Router;
     addressP2P_Pop_Router.SetBase("192.168.2.0", "255.255.255.0");
@@ -157,47 +165,67 @@ main(int argc, char *argv[]) {
         NetDeviceContainer lanDevices;
         lanDevices = pointToPointLan.Install(lan);
         lanInterfaceContainers[i] = addressLanScheme.Assign(lanDevices);
+
     }
 
 
-    uint16_t port = 50000;
 
 
-    PacketSinkHelper sinkHelper ("ns3::TcpSocketFactory", Address (InetSocketAddress (Ipv4Address::GetAny (), port)));
-    ApplicationContainer sinkApp = sinkHelper.Install (cp);
-    sinkApp.Start (Seconds (1.0));
-    sinkApp.Stop (Seconds (100.0));
+    ///////////////////////////////////////////:
+    // NOW THE APPLICATION PART
+    //////////////////////////////////////////
 
-
-
-
-
-    AddressValue remoteAddress
-            (InetSocketAddress (routerCp_add.GetAddress(1), port));
-    OnOffHelper clientHelper ("ns3::TcpSocketFactory", remoteAddress.Get());
-
-    clientHelper.SetConstantRate(DataRate ("100b/s"),10);
-
-
+    uint16_t gwPort = 50000;
 
 
     for (int i = 0; i < nGW; i++) {
 
-        ApplicationContainer clientApps = clientHelper .Install(clientNodes.Get(i));
-        clientApps.Start(Seconds(2.0));
-        clientApps.Stop(Seconds(100.0));
+
+
+        // GATEWAY
+        //create the app
+        Ptr<GwApplication> gwApp = CreateObject<GwApplication>();
+        //create the soket to put in the app
+
+        //gwApp->Setup(InetSocketAddress(lanInterfaceContainers[i].GetAddress(1), gwPort));
+        gwApp->Setup(InetSocketAddress(lanInterfaceContainers[i].GetAddress(1), gwPort));
+        //put the application in the node
+        gwNodes.Get(i)->AddApplication(gwApp);
+
+        //setup simulator start/end date
+        gwApp->SetStartTime(Seconds(3.));
+        gwApp->SetStopTime(Seconds(20.));
+
+
+
+
+
+
+        // CLIENT
+
+        Ptr<labri::StreamingApplicationClient> clientApp = CreateObject<labri::StreamingApplicationClient>();
+
+
+        clientApp->Setup(InetSocketAddress(lanInterfaceContainers[i].GetAddress(1), gwPort));
+
+        clientNodes.Get(i)->AddApplication(clientApp);
+        clientApp->SetStartTime(Seconds(15));
+        clientApp->SetStopTime(Seconds(20.));
+
     }
+
 
     Ipv4GlobalRoutingHelper::PopulateRoutingTables();
 
 
-
-    pointToPointCP.EnablePcapAll("CP");
+    //pointToPointCP.EnablePcapAll("CP");
     pointToPointLan.EnablePcapAll("Lan");
-    pointToPointPOP.EnablePcapAll("POP");
+    //pointToPointPOP.EnablePcapAll("POP");
 
 
     Simulator::Run();
     Simulator::Destroy();
     return 0;
 }
+
+
