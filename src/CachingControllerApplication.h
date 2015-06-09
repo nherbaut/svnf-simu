@@ -20,7 +20,7 @@
 using namespace ns3;
 
 namespace labri {
-    class CachingControllerApplication : Application {
+    class CachingControllerApplication : public Application {
 
     public:
 
@@ -31,17 +31,17 @@ namespace labri {
 
         virtual ~CachingControllerApplication();
 
-        virtual void Setup(Address signalingAddress, Address configurationAddress);
+        virtual void Setup( InetSocketAddress configurationAddress);
 
     private:
 
-        Ptr<Socket> m_socketSignaling;
+
         Ptr<Socket> m_socketConfiguration;
         std::list<Ptr<Socket> > m_acceptedSockets;
+        std::list<Ptr<Socket> > m_gatewaysConn;
         std::list<std::string> m_hostedResources;
-        Address m_signaling;
-        Address m_configuration;
 
+        InetSocketAddress m_configuration;
 
 
         void handleNewResourceAsked(const std::string &str);
@@ -53,7 +53,9 @@ namespace labri {
         bool HandleConnectionRequest(Ptr<Socket> socket, const Address &from);
 
         void HandleSignalingAccept(Ptr<Socket> socket, const Address &from);
+
         void HandleConfigurationAccept(Ptr<Socket> socket, const Address &from);
+
         std::string serializeConf() const;
 
         virtual void StartApplication(void);
@@ -65,9 +67,13 @@ namespace labri {
 
         virtual void StopApplication(void);
 
-        void RespondToClientRequest();
+        void HandleClientConfigurationInput(Ptr<Socket> socket);
 
 
+        void UpdateGwConfiguration();
+
+        void HandleNewResourceAsked(
+                const std::string &);
     };
 
 }

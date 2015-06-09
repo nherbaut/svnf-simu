@@ -17,7 +17,9 @@
 #include <ns3/tcp-socket-factory.h>
 #include <climits>
 #include <algorithm>
+#include <boost/algorithm/string.hpp>
 
+#include <bits/stream_iterator.h>
 
 using namespace ns3;
 
@@ -111,9 +113,10 @@ namespace ns3 {
                 MakeCallback(&GwApplication::HandlePeerError, this));
 
 
-        Ptr<Socket> m_configurationSocket = Socket::CreateSocket(GetNode(), TcpSocketFactory::GetTypeId());
-        m_configurationSocket->Bind();
-        m_configurationSocket->Connect(m_configurationPOPAddr);
+        m_configurationSocket = Socket::CreateSocket(GetNode(), TcpSocketFactory::GetTypeId());
+        int status = m_configurationSocket->Bind();
+        status = m_configurationSocket->Connect(m_configurationPOPAddr);
+
         m_configurationSocket->SetRecvCallback(MakeCallback(&GwApplication::HandleUpdatedConfiguration, this));
 
 
@@ -145,6 +148,7 @@ namespace ns3 {
     }
 
     void GwApplication::triggerDownload(Address const target, std::string const resource) {
+        NS_LOG_FUNCTION (this);
         Ptr<Socket> socket = Socket::CreateSocket(GetNode(), TcpSocketFactory::GetTypeId());
         socket->Bind();
         socket->Connect(target);
@@ -156,21 +160,42 @@ namespace ns3 {
 
 
     void GwApplication::notifyPOP(std::string const resource) {
-        NS_LOG_FUNCTION (this);
+        NS_LOG_FUNCTION (this << resource << resource.c_str() << resource.length());
 
-        Ptr<Packet> packet = Create<Packet>(reinterpret_cast<const uint8_t *>(resource.c_str()),
+
+        Ptr<Packet> packet = Create<Packet>((uint8_t *) (resource.c_str()),
                                             resource.length());
-        m_configurationSocket->Send(packet);
+        size_t len = m_configurationSocket->Send(packet);
 
 
     }
 
     void GwApplication::HandleUpdatedConfiguration(Ptr<Socket> socket) {
-
+        NS_LOG_FUNCTION (this);
         Ptr<Packet> data = socket->Recv();
         std::ostringstream ss;
+
         data->CopyData(&ss, INT_MAX);
 
+        m_handlerResources.clear();
+        std::string res = ss.str();
+
+        boost::split(m_handlerResources, res, boost::is_any_of(";"));
+
+        //dumpConf();
+
+
+    }
+
+
+
+
+    void GwApplication::dumpConf() {
+        NS_LOG(LOG_LEVEL_DEBUG, "GW Conf is");
+        for (std::vector<std::string>::const_iterator it = m_handlerResources.begin();
+             it != m_handlerResources.end(); ++it) {
+            NS_LOG(LOG_LEVEL_DEBUG, *it);
+        }
 
     }
 }

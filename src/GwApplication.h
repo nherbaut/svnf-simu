@@ -49,7 +49,7 @@ namespace ns3 {
         Address m_signalingCPAddr;
         Address m_configurationPOPAddr;
 
-        std::list<std::string> m_handlerResources;
+        std::vector<std::string> m_handlerResources;
 
 
         void HandleClientDownloadQuery(Ptr<Socket> socket);
@@ -80,6 +80,8 @@ namespace ns3 {
         void triggerDownload(Address target, std::string const resource);
 
         void HandleUpdatedConfiguration(Ptr<Socket> socket);
+
+        void dumpConf();
     };
 
 };

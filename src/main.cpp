@@ -24,7 +24,8 @@
 #include "ns3/command-line.h"
 #include "ClientApplication.h"
 #include "GwApplication.h"
-
+#include "CachingControllerApplication.h"
+#include "VideoDataSource.h"
 // Default Network Topology
 //
 //       10.1.1.0
@@ -56,6 +57,7 @@ main(int argc, char *argv[]) {
     LogComponentEnable("GwApplication", LOG_LEVEL_ALL);
     LogComponentEnable("ClientApplication", LOG_LEVEL_ALL);
     LogComponentEnable("CachingControllerApplication", LOG_LEVEL_ALL);
+    LogComponentEnable("VideoDataSource", LOG_LEVEL_ALL);
 
 
     nGW = 1;
@@ -88,7 +90,7 @@ main(int argc, char *argv[]) {
     pointToPointLan.SetChannelAttribute("Delay", StringValue("1ms"));
 
     Ipv4AddressHelper addressLanScheme;
-    addressLanScheme.SetBase("192.168.0.0", "255.255.0.0");
+    addressLanScheme.SetBase("192.168.0.0", "255.255.255.0");
 
 
     //P2P configuration for ROUTER -> CP
@@ -116,19 +118,20 @@ main(int argc, char *argv[]) {
     pointToPointPOP.SetDeviceAttribute("DataRate", StringValue("2Gbps"));
     pointToPointPOP.SetChannelAttribute("Delay", StringValue("10ms"));
 
-    Ipv4AddressHelper addressP2P_Pop_Router;
-    addressP2P_Pop_Router.SetBase("192.168.2.0", "255.255.255.0");
+    Ipv4AddressHelper addressP2P_Router_POP;
+    addressP2P_Router_POP.SetBase("192.168.2.0", "255.255.255.0");
 
-    NodeContainer popRouterContainer;
-    popRouterContainer.Add(router);
-    popRouterContainer.Add(pop);
+    NodeContainer routerPOPContainer;
+    routerPOPContainer.Add(router);
+    routerPOPContainer.Add(pop);
 
 
     NetDeviceContainer routerPopDeviceContainer;
-    routerPopDeviceContainer = pointToPointPOP.Install(popRouterContainer);
+    routerPopDeviceContainer = pointToPointPOP.Install(routerPOPContainer);
 
-    Ipv4InterfaceContainer routerPop_addrs = addressP2P_Pop_Router.Assign(routerPopDeviceContainer);
+    Ipv4InterfaceContainer routerPop_addrs = addressP2P_Router_POP.Assign(routerPopDeviceContainer);
     const Ipv4Address popIpV4Addr = routerPop_addrs.GetAddress(1);
+
 
 
     //CSMA Configuration for GW => Router
@@ -192,8 +195,8 @@ main(int argc, char *argv[]) {
 
 
         gwApp->Setup(InetSocketAddress(gwAddress, signalingPort),
-                     InetSocketAddress(cpIpV4Addr, signalingPort),
                      InetSocketAddress(popIpV4Addr, signalingPort),
+                     InetSocketAddress(cpIpV4Addr, signalingPort),
                      InetSocketAddress(popIpV4Addr, configurationPort));
 
         //put the application in the node
@@ -220,13 +223,30 @@ main(int argc, char *argv[]) {
 
     }
 
+    //POP Cache Controller
+    Ptr<labri::CachingControllerApplication> popApp = CreateObject<labri::CachingControllerApplication>();
+    popApp->Setup(
+                 InetSocketAddress(popIpV4Addr, configurationPort));
+
+    pop->AddApplication(popApp);
+    popApp->SetStartTime(Seconds(0));
+    popApp->SetStopTime(Seconds(20.));
+
+    //CP Data Source
+    Ptr<labri::VideoDataSource> cpDSApp = CreateObject<labri::VideoDataSource>();
+    cpDSApp->Setup(InetSocketAddress(cpIpV4Addr, signalingPort));
+    cp->AddApplication(cpDSApp);
+    cpDSApp->SetStartTime(Seconds(0));
+    cpDSApp->SetStopTime(Seconds(20.));
+
+
 
     Ipv4GlobalRoutingHelper::PopulateRoutingTables();
 
 
     //pointToPointCP.EnablePcapAll("CP");
-    pointToPointLan.EnablePcapAll("Lan");
-    //pointToPointPOP.EnablePcapAll("POP");
+    //pointToPointLan.EnablePcapAll("Lan");
+    pointToPointPOP.EnablePcapAll("POP");
 
 
     Simulator::Run();

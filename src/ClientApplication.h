@@ -57,6 +57,7 @@ namespace labri {
         int m_retry = 0;
 
         virtual void StartApplication(void) {
+            NS_LOG_FUNCTION(this);
             const std::string resource("abc");
             askForDataSourceToGW(resource);
 
@@ -65,6 +66,7 @@ namespace labri {
 
 
         virtual void askForDataSourceToGW(const std::string &resource) {
+            NS_LOG_FUNCTION(this);
             Ptr<Socket> socket = Socket::CreateSocket(GetNode(), TcpSocketFactory::GetTypeId());
 
             std::stringstream ss;

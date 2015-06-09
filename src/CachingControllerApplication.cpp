@@ -8,7 +8,8 @@
 #include "MD5.h"
 #include <map>
 #include <iterator>
-
+#include <climits>
+#include <boost/algorithm/string.hpp>
 
 namespace labri {
 
@@ -17,7 +18,7 @@ namespace labri {
     NS_OBJECT_ENSURE_REGISTERED (CachingControllerApplication);
 
 
-    CachingControllerApplication::CachingControllerApplication() : m_signaling(), m_socketSignaling(0) {
+    CachingControllerApplication::CachingControllerApplication() : m_configuration("") {
 
     }
 
@@ -32,8 +33,9 @@ namespace labri {
 
     }
 
-    void CachingControllerApplication::Setup(Address signalingAddress, Address configurationAddress) {
-        m_signaling = signalingAddress;
+    void CachingControllerApplication::Setup(
+            InetSocketAddress configurationAddress) {
+
         m_configuration = configurationAddress;
     }
 
@@ -52,33 +54,20 @@ namespace labri {
         return true;
     }
 
-    void CachingControllerApplication::HandleSignalingAccept(Ptr<Socket> socket, const Address &from) {
-        m_acceptedSockets.push_back(socket);
-        socket->SetRecvCallback(MakeCallback(&CachingControllerApplication::HandleRead, this));
-
-    }
-
 
     void CachingControllerApplication::StartApplication(void) {
-        m_socketSignaling = Socket::CreateSocket(GetNode(), TcpSocketFactory::GetTypeId());
+        NS_LOG_FUNCTION (this);
+
         m_socketConfiguration = Socket::CreateSocket(GetNode(), TcpSocketFactory::GetTypeId());
 
 
-        int status = m_socketSignaling->Bind(m_signaling);
-        status = m_socketSignaling->Listen();
-        m_socketSignaling->SetAcceptCallback(
-                MakeCallback(&CachingControllerApplication::HandleConnectionRequest, this),
-                MakeCallback(&CachingControllerApplication::HandleSignalingAccept, this));
-        m_socketSignaling->SetCloseCallbacks(
-                MakeCallback(&CachingControllerApplication::HandlePeerClose, this),
-                MakeCallback(&CachingControllerApplication::HandlePeerError, this));
-
-
-        m_socketConfiguration->Bind(m_configuration);
-        m_socketConfiguration->Listen();
+        int status = m_socketConfiguration->Bind(m_configuration);
+        status = m_socketConfiguration->Listen();
         m_socketConfiguration->SetAcceptCallback(
                 MakeCallback(&CachingControllerApplication::HandleConnectionRequest, this),
                 MakeCallback(&CachingControllerApplication::HandleConfigurationAccept, this));
+
+        NS_LOG_FUNCTION (this << "callbacks registered");
 
 
     }
@@ -89,17 +78,17 @@ namespace labri {
         for (std::list<std::string>::const_iterator it = m_hostedResources.begin();
              it != m_hostedResources.end(); ++it) {
             ss << *it << ";";
+
         }
 
         return ss.str();
     }
 
     void CachingControllerApplication::HandleConfigurationAccept(Ptr<Socket> socket, const Address &from) {
+        NS_LOG_FUNCTION (this);
+        m_gatewaysConn.push_back(socket);
+        socket->SetRecvCallback(MakeCallback(&CachingControllerApplication::HandleClientConfigurationInput, this));
 
-        const std::string data = this->serializeConf();
-        Ptr<Packet> packet = Create<Packet>(reinterpret_cast<const uint8_t *>(data.c_str()), data.length());
-        socket->Send(packet);
-        socket->Close();
 
     }
 
@@ -117,7 +106,32 @@ namespace labri {
 
     }
 
-    void CachingControllerApplication::RespondToClientRequest() {
+    void CachingControllerApplication::HandleClientConfigurationInput(Ptr<Socket> HandleClientConfigurationInput) {
+        NS_LOG_FUNCTION(this);
+        std::ostringstream buf;
+        HandleClientConfigurationInput->Recv()->CopyData(&buf, INT_MAX);
+        HandleNewResourceAsked(buf.str());
+        UpdateGwConfiguration();
+
+
+    }
+
+    void CachingControllerApplication::UpdateGwConfiguration(
+    ) {
+        NS_LOG_FUNCTION(this);
+        const std::string updatedConf = this->serializeConf();
+        NS_LOG_FUNCTION(this << updatedConf);
+        Ptr<Packet> pkt = Create<Packet>(reinterpret_cast<const uint8_t *>(updatedConf.c_str()), updatedConf.length());
+        for (std::list<Ptr<Socket>>::const_iterator it = m_gatewaysConn.begin(); it != m_gatewaysConn.end(); ++it) {
+            Ptr<Socket> gw = *it;
+            gw->Send(pkt);
+        }
+
+    }
+
+    void CachingControllerApplication::HandleNewResourceAsked(
+            const std::string &res) {
+        this->m_hostedResources.push_back(res);
 
     }
 }
