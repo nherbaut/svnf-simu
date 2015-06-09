@@ -26,13 +26,18 @@
 #include "GwApplication.h"
 #include "CachingControllerApplication.h"
 #include "VideoDataSource.h"
-// Default Network Topology
 //
-//       10.1.1.0
-// n0 -------------- n1   n2   n3   n4
-//    point-to-point  |    |    |    |
-//                    ================
-//                      LAN 10.1.2.0
+// CLIENT --- GW----\
+// .................\
+// CLIENT --- GW-----\
+// CLIENT --- GW-----\
+// CLIENT --- GW --- ROUTER --- POP
+//                     |
+//                     |
+//                    CP
+//
+//
+
 
 
 using namespace ns3;
@@ -44,6 +49,7 @@ int
 main(int argc, char *argv[]) {
     bool verbose = true;
     uint32_t nGW = 2;
+    const int END=2000;
 
     CommandLine cmd;
     cmd.AddValue("nCsma", "Number of \"extra\" CSMA nodes/devices", nGW);
@@ -57,11 +63,11 @@ main(int argc, char *argv[]) {
     LogComponentEnable("GwApplication", LOG_LEVEL_ALL);
     LogComponentEnable("ClientApplication", LOG_LEVEL_ALL);
     LogComponentEnable("CachingControllerApplication", LOG_LEVEL_ALL);
-    LogComponentEnable("VideoDataSource", LOG_LEVEL_ALL);
-    LogComponentEnable("PacketSink", LOG_LEVEL_ALL);
+    //LogComponentEnable("VideoDataSource", LOG_LEVEL_ALL);
+    //LogComponentEnable("PacketSink", LOG_LEVEL_ALL);
 
 
-    nGW = 1;
+    nGW = 10;
 
 
     NodeContainer gwNodes;
@@ -205,7 +211,7 @@ main(int argc, char *argv[]) {
 
         //setup simulator start/end date
         gwApp->SetStartTime(Seconds(3.));
-        gwApp->SetStopTime(Seconds(20.));
+        gwApp->SetStopTime(Seconds(END));
 
 
         // CLIENT
@@ -216,8 +222,8 @@ main(int argc, char *argv[]) {
                          InetSocketAddress(clientAddress, dataSourcePort));
 
         clientNodes.Get(i)->AddApplication(clientApp);
-        clientApp->SetStartTime(Seconds(15));
-        clientApp->SetStopTime(Seconds(20.));
+        clientApp->SetStartTime(Seconds(5*(i+1)));
+        clientApp->SetStopTime(Seconds(END));
 
         PacketSinkHelper helper("ns3::TcpSocketFactory", InetSocketAddress(clientAddress, dataSourcePort));
         helper.Install(clientNodes.Get(i));
@@ -231,23 +237,31 @@ main(int argc, char *argv[]) {
 
     pop->AddApplication(popApp);
     popApp->SetStartTime(Seconds(0));
-    popApp->SetStopTime(Seconds(20.));
+    popApp->SetStopTime(Seconds(END));
 
     //CP Data Source
     Ptr<labri::VideoDataSource> cpDSApp = CreateObject<labri::VideoDataSource>();
     cpDSApp->Setup(InetSocketAddress(cpIpV4Addr, signalingPort));
     cp->AddApplication(cpDSApp);
     cpDSApp->SetStartTime(Seconds(0));
-    cpDSApp->SetStopTime(Seconds(20.));
+    cpDSApp->SetStopTime(Seconds(END));
+
+
+    //POP Data Source
+    Ptr<labri::VideoDataSource> popDSApp = CreateObject<labri::VideoDataSource>();
+    popDSApp->Setup(InetSocketAddress(popIpV4Addr, signalingPort));
+    pop->AddApplication(popDSApp);
+    popDSApp->SetStartTime(Seconds(0));
+    popDSApp->SetStopTime(Seconds(END));
 
 
 
     Ipv4GlobalRoutingHelper::PopulateRoutingTables();
 
 
-    //pointToPointCP.EnablePcapAll("CP");
+    pointToPointCP.EnablePcapAll("CP");
     //pointToPointLan.EnablePcapAll("Lan");
-    pointToPointPOP.EnablePcapAll("POP");
+    //pointToPointPOP.EnablePcapAll("POP");
 
 
     Simulator::Run();
