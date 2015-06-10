@@ -29,7 +29,6 @@ namespace  labri {
 
         virtual void StopApplication(void);
 
-
         VideoDataSource();
 
         virtual ~VideoDataSource();
@@ -38,9 +37,11 @@ namespace  labri {
     private:
         InetSocketAddress m_controlAddr;
 
-
-
         Ptr<Socket> m_controlSocket;
+
+        DataRate m_channelRate;
+        DataRate remainingRate;
+
 
         bool HandleConnectionRequest(Ptr<Socket>, const Address &);
 
@@ -53,9 +54,9 @@ namespace  labri {
 
         void HandleStreamingRequest(Ptr<Socket> ptr);
 
-        void ScheduleTx(Ptr<Socket> clientSocket, unsigned long total,unsigned long packetSize);
+        void SendPacket(Ptr<Socket> clientSocket, unsigned long total, unsigned long packetSize, DataRate dataRate);
 
-        void SendPacket(Ptr<Socket> clientSocket, unsigned long total,unsigned long packetSize);
+        void ScheduleTx(Ptr<Socket> clientSocket, unsigned long total, DataRate dataRate);
     };
 }
 

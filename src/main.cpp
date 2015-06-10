@@ -184,6 +184,11 @@ main(int argc, char *argv[]) {
     // NOW THE APPLICATION PART
     //////////////////////////////////////////
 
+    std::stringstream ss;
+    ss << "\tpop is " << popIpV4Addr << "\n";
+    ss << "\tCP is " << cpIpV4Addr << "\n";
+    NS_LOG_UNCOND(ss.str().c_str());
+
     uint16_t signalingPort = 18080;
     uint16_t configurationPort = 18081;
     uint16_t dataSourcePort = 18082;
@@ -260,8 +265,8 @@ main(int argc, char *argv[]) {
 
 
     pointToPointCP.EnablePcapAll("CP");
-    //pointToPointLan.EnablePcapAll("Lan");
-    //pointToPointPOP.EnablePcapAll("POP");
+    pointToPointLan.EnablePcapAll("Lan");
+    pointToPointPOP.EnablePcapAll("POP");
 
 
     Simulator::Run();

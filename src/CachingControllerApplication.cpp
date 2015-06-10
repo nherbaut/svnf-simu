@@ -11,6 +11,7 @@
 #include <climits>
 #include <boost/algorithm/string.hpp>
 
+
 namespace labri {
 
     NS_LOG_COMPONENT_DEFINE ("CachingControllerApplication");
@@ -75,7 +76,7 @@ namespace labri {
     std::string CachingControllerApplication::serializeConf() const {
 
         std::stringstream ss;
-        for (std::list<std::string>::const_iterator it = m_hostedResources.begin();
+        for (std::set<std::string>::const_iterator it = m_hostedResources.begin();
              it != m_hostedResources.end(); ++it) {
             ss << *it << ";";
 
@@ -138,7 +139,7 @@ namespace labri {
     }
 
     void CachingControllerApplication::TranscodingAndDeployingDone(const std::string &res){
-        this->m_hostedResources.push_back(res);
+        this->m_hostedResources.insert(res);
         UpdateGwConfiguration();
     }
 }

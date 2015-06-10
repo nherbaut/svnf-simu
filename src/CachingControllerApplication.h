@@ -39,7 +39,7 @@ namespace labri {
         Ptr<Socket> m_socketConfiguration;
         std::list<Ptr<Socket> > m_acceptedSockets;
         std::list<Ptr<Socket> > m_gatewaysConn;
-        std::list<std::string> m_hostedResources;
+        std::set<std::string> m_hostedResources;
 
         InetSocketAddress m_configuration;
 

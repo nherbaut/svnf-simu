@@ -72,35 +72,45 @@ namespace labri {
         const std::string clientIP = clientInetAdd.substr(0, clientInetAdd.find(':'));
         const std::string clientPort = clientInetAdd.substr(clientInetAdd.find(':') + 1, clientInetAdd.length());
 
-        NS_LOG_FUNCTION(this << "stream to" << clientIP << clientPort);
+
         InetSocketAddress clientSinkAddress(clientIP.c_str(), boost::lexical_cast<uint16_t>(clientPort));
         Ptr<Socket> clientSinkSocket = Socket::CreateSocket(GetNode(), TcpSocketFactory::GetTypeId());
         clientSinkSocket->Bind();
         clientSinkSocket->Connect(clientSinkAddress);
-        SendPacket(clientSinkSocket, 1024 * 20, 1024);
+        DataRate video = DataRate("320kbps");
+        if (m_channelRate.GetBitRate() - video.GetBitRate() > 0) {
+            m_channelRate = DataRate(m_channelRate.GetBitRate() - video.GetBitRate());
+            ScheduleTx(clientSinkSocket, 30 * 1000000, video);
+        }
+        else {
+            NS_LOG_FUNCTION("SLA Failure");
+        }
 
 
     }
 
     void
-    VideoDataSource::SendPacket(Ptr<Socket> clientSocket, unsigned long total, unsigned long packetSize) {
-        NS_LOG_FUNCTION(this);
+    VideoDataSource::SendPacket(Ptr<Socket> clientSocket, unsigned long total, unsigned long packetSize,
+                                DataRate dataRate) {
+
         Ptr<Packet> packet = Create<Packet>(packetSize);
         clientSocket->Send(packet);
         total -= packetSize;
         if (total > 0) {
-            ScheduleTx(clientSocket, total, packetSize);
+            ScheduleTx(clientSocket, total, dataRate);
         }
         else {
+            m_channelRate = DataRate(m_channelRate.GetBitRate() + dataRate.GetBitRate());
             clientSocket->Close();
         }
     }
 
     void
-    VideoDataSource::ScheduleTx(Ptr<Socket> clientSocket, unsigned long total, unsigned long packetSize) {
+    VideoDataSource::ScheduleTx(Ptr<Socket> clientSocket, unsigned long total, DataRate dataRate) {
 
-        Time tNext(Seconds(1));
-        Simulator::Schedule(tNext, &VideoDataSource::SendPacket, this,clientSocket, total, packetSize);
+        Time tNext(Seconds(0.01));
+        double packetSize = static_cast<double>(0.01 * dataRate.GetBitRate());
+        Simulator::Schedule(tNext, &VideoDataSource::SendPacket, this, clientSocket, total, packetSize, dataRate);
 
     }
 }
