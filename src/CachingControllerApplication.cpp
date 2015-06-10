@@ -111,7 +111,7 @@ namespace labri {
         std::ostringstream buf;
         HandleClientConfigurationInput->Recv()->CopyData(&buf, INT_MAX);
         HandleNewResourceAsked(buf.str());
-        UpdateGwConfiguration();
+
 
 
     }
@@ -131,7 +131,14 @@ namespace labri {
 
     void CachingControllerApplication::HandleNewResourceAsked(
             const std::string &res) {
-        this->m_hostedResources.push_back(res);
 
+        Time tNext(Seconds(10));
+        Simulator::Schedule(tNext, &CachingControllerApplication::TranscodingAndDeployingDone, this,res);
+
+    }
+
+    void CachingControllerApplication::TranscodingAndDeployingDone(const std::string &res){
+        this->m_hostedResources.push_back(res);
+        UpdateGwConfiguration();
     }
 }

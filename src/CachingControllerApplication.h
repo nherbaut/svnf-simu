@@ -74,6 +74,8 @@ namespace labri {
 
         void HandleNewResourceAsked(
                 const std::string &);
+
+        void TranscodingAndDeployingDone(const std::string &);
     };
 
 }
