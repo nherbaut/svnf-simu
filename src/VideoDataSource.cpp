@@ -7,14 +7,32 @@
 #include <ns3/log.h>
 #include <climits>
 #include <boost/lexical_cast.hpp>
+#include <ns3/traced-value.h>
+#include <ns3/string.h>
 
 namespace labri {
     NS_LOG_COMPONENT_DEFINE ("VideoDataSource");
 
     NS_OBJECT_ENSURE_REGISTERED (VideoDataSource);
 
-    void VideoDataSource::Setup(InetSocketAddress control) {
+    TypeId
+    VideoDataSource::GetTypeId(void) {
+        static TypeId tid = TypeId("labri::VideoDataSource")
+                .SetParent(Application::GetTypeId())
+                .AddConstructor<VideoDataSource>()
+                .AddTraceSource("bandwidth_available",
+                                "Bandwidth Available",
+                                MakeTraceSourceAccessor(&VideoDataSource::m_channelRate),
+                                "ns3::TracedValue::Uint32Callback");
+
+
+        return tid;
+    }
+
+
+    void VideoDataSource::Setup(InetSocketAddress control, DataRate channelDataRate) {
         m_controlAddr = control;
+        m_channelRate = channelDataRate.GetBitRate();
     }
 
     void VideoDataSource::StartApplication() {
@@ -52,10 +70,11 @@ namespace labri {
     }
 
     void VideoDataSource::HandlePeerError(Ptr<Socket> ptr) {
-
+        NS_LOG_FUNCTION(this);
     }
 
     void VideoDataSource::HandlePeerClose(Ptr<Socket> ptr) {
+        NS_LOG_FUNCTION(this << ptr << "done at " << Simulator::Now().As(Time::Unit::S));
 
     }
 
@@ -77,40 +96,50 @@ namespace labri {
         Ptr<Socket> clientSinkSocket = Socket::CreateSocket(GetNode(), TcpSocketFactory::GetTypeId());
         clientSinkSocket->Bind();
         clientSinkSocket->Connect(clientSinkAddress);
-        DataRate video = DataRate("320kbps");
-        if (m_channelRate.GetBitRate() - video.GetBitRate() > 0) {
-            m_channelRate = DataRate(m_channelRate.GetBitRate() - video.GetBitRate());
-            ScheduleTx(clientSinkSocket, 30 * 1000000, video);
-        }
-        else {
-            NS_LOG_FUNCTION("SLA Failure");
-        }
+
+        ClientStats stats;
+        stats.currentTxBytes = 0;
+        stats.totalTxBytes = 10000;
+        m_socketData[clientSinkSocket] = stats;
+
+        //DataRate video = DataRate("320kbps");
+        Simulator::ScheduleNow(&VideoDataSource::pourData, this, clientSinkSocket);
 
 
     }
 
-    void
-    VideoDataSource::SendPacket(Ptr<Socket> clientSocket, unsigned long total, unsigned long packetSize,
-                                DataRate dataRate) {
+    void VideoDataSource::pourData(Ptr<Socket> clientSinkSocket) {
+        clientSinkSocket->SetSendCallback(MakeCallback(&VideoDataSource::WriteUntilBufferFull, this));
 
-        Ptr<Packet> packet = Create<Packet>(packetSize);
-        clientSocket->Send(packet);
-        total -= packetSize;
-        if (total > 0) {
-            ScheduleTx(clientSocket, total, dataRate);
-        }
-        else {
-            m_channelRate = DataRate(m_channelRate.GetBitRate() + dataRate.GetBitRate());
-            clientSocket->Close();
-        }
+        WriteUntilBufferFull(clientSinkSocket, clientSinkSocket->GetTxAvailable());
     }
 
-    void
-    VideoDataSource::ScheduleTx(Ptr<Socket> clientSocket, unsigned long total, DataRate dataRate) {
 
-        Time tNext(Seconds(0.01));
-        double packetSize = static_cast<double>(0.01 * dataRate.GetBitRate());
-        Simulator::Schedule(tNext, &VideoDataSource::SendPacket, this, clientSocket, total, packetSize, dataRate);
+    void VideoDataSource::WriteUntilBufferFull(Ptr<Socket> localSocket, uint32_t txSpace) {
+
+        while (m_socketData[localSocket].currentTxBytes < m_socketData[localSocket].totalTxBytes &&
+               localSocket->GetTxAvailable() > 0) {
+            uint32_t left = m_socketData[localSocket].totalTxBytes - m_socketData[localSocket].currentTxBytes;
+            uint32_t dataOffset = m_socketData[localSocket].currentTxBytes % writeSize;
+            uint32_t toWrite = writeSize - dataOffset;
+            toWrite = std::min(toWrite, left);
+            toWrite = std::min(toWrite, localSocket->GetTxAvailable());
+
+            Ptr<Packet> packet = Create<Packet>(toWrite);
+            int amountSent = localSocket->Send(packet);
+            if (amountSent < 0) {
+                // we will be called again when new tx space becomes available.
+                return;
+            }
+            m_socketData[localSocket].currentTxBytes += amountSent;
+        }
+
+        localSocket->Close();
+        NS_LOG_FUNCTION(this <<  Simulator::Now().As(Time::Unit::S) <<
+                        m_socketData[localSocket].currentTxBytes << m_socketData[localSocket].totalTxBytes);
+
 
     }
+
+
 }

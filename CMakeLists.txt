@@ -5,7 +5,7 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/")
 
 
 find_package(NS3 3.23 REQUIRED core csma network internet point-to-point applications)
-find_package(Boost REQUIRED  )
+find_package(Boost REQUIRED regex )
 
 MESSAGE("${NS3_LIBRARIES}")
 
@@ -22,4 +22,4 @@ src/MD5.cpp
 src/VideoDataSource.cpp
 )
 add_executable(svnf_simu ${SOURCE_FILES})
-target_link_libraries(svnf_simu ${NS3_LIBRARIES} pthread thread_db)
+target_link_libraries(svnf_simu ${NS3_LIBRARIES}  ${Boost_LIBRARIES} pthread thread_db)

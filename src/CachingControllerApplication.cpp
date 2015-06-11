@@ -10,6 +10,7 @@
 #include <iterator>
 #include <climits>
 #include <boost/algorithm/string.hpp>
+#include <ns3/tcp-newreno.h>
 
 
 namespace labri {
@@ -60,6 +61,7 @@ namespace labri {
         NS_LOG_FUNCTION (this);
 
         m_socketConfiguration = Socket::CreateSocket(GetNode(), TcpSocketFactory::GetTypeId());
+
 
 
         int status = m_socketConfiguration->Bind(m_configuration);

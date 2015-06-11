@@ -26,10 +26,13 @@
 #include "GwApplication.h"
 #include "CachingControllerApplication.h"
 #include "VideoDataSource.h"
+#include <ns3/config.h>
+#include <boost/regex.hpp>
+#include <boost/lexical_cast.hpp>
+
 //
-// CLIENT --- GW----\
-// .................\
-// CLIENT --- GW-----\
+// CLIENT --- GW---- \
+// CLIENT --- GW---- \
 // CLIENT --- GW-----\
 // CLIENT --- GW --- ROUTER --- POP
 //                     |
@@ -40,16 +43,93 @@
 
 
 
+
+
 using namespace ns3;
 
 
 NS_LOG_COMPONENT_DEFINE ("SVNF");
 
+void
+DataRateTrace(uint32_t oldValue, uint32_t newValue) {
+    std::cout << "Traced " << oldValue << " to " << newValue << std::endl;
+}
+
+
+class ClientStat {
+
+public:
+    Time startDate;
+    Time stopDate;
+    uint32_t totalSize = 0;
+
+};
+
+std::map<int, ClientStat> clientStats;
+
+void PacketAddressTrace(std::string context, const Ptr<const Packet> packet, const Address &address) {
+
+    boost::regex expression(
+            "/NodeList/(\\d+)/.*");
+
+    std::string::const_iterator start, end;
+    start = context.begin();
+    end = context.end();
+    boost::match_results<std::string::const_iterator> what;
+    boost::match_flag_type flags = boost::match_default;
+    if (regex_search(start, end, what, expression, flags)) {
+        std::string s(what[1].first, what[1].second);
+        clientStats[boost::lexical_cast<int>(s)].stopDate = Simulator::Now();
+        clientStats[boost::lexical_cast<int>(s)].totalSize += packet->GetSize();
+
+        return;
+    }
+
+
+}
+
 int
 main(int argc, char *argv[]) {
     bool verbose = true;
     uint32_t nGW = 2;
-    const int END=2000;
+    const int END = INT_MAX;
+
+
+    const std::string popDataRate("1Gbps");
+    const std::string cpDataRate("1Gbps");
+
+    nGW = 50;
+
+    //Config::SetDefault ("ns3::TcpSocket::SndBufSize", ns3::UintegerValue(100000));
+    //Config::SetDefault ("ns3::TcpSocket::RcvBufSize", ns3::UintegerValue(100000));
+    //Config::SetDefault ("ns3::TcpSocket::SegmentSize",ns3::UintegerValue(1460));
+
+
+    //LAN
+    PointToPointHelper pointToPointLan;
+    pointToPointLan.SetDeviceAttribute("DataRate", StringValue("1Gbps"));
+    pointToPointLan.SetChannelAttribute("Delay", StringValue("1ms"));
+
+    //CSMA
+    CsmaHelper csmaHelper;
+    csmaHelper.SetChannelAttribute("DataRate", StringValue("1Gbps"));
+    csmaHelper.SetChannelAttribute("Delay", StringValue("1ms"));
+
+    //POP
+    PointToPointHelper pointToPointPOP;
+    pointToPointPOP.SetDeviceAttribute("DataRate", DataRateValue(DataRate(popDataRate)));
+    pointToPointPOP.SetChannelAttribute("Delay", StringValue("5ms"));
+
+    //CP
+    PointToPointHelper pointToPointCP;
+    pointToPointCP.SetDeviceAttribute("DataRate", DataRateValue(DataRate(cpDataRate)));
+    pointToPointCP.SetChannelAttribute("Delay", StringValue("10ms"));
+
+
+    Ptr<ExponentialRandomVariable> ev = CreateObject<ExponentialRandomVariable>();
+    ev->SetAttribute("Mean", DoubleValue(0.2));
+    ev->SetAttribute("Bound", DoubleValue(100.));
+
 
     CommandLine cmd;
     cmd.AddValue("nCsma", "Number of \"extra\" CSMA nodes/devices", nGW);
@@ -57,17 +137,19 @@ main(int argc, char *argv[]) {
 
     cmd.Parse(argc, argv);
 
-
-    //LogComponentEnable("TcpSocketBase", LOG_LEVEL_INFO);
-    LogComponentEnable("SVNF", LOG_LEVEL_ALL);
-    LogComponentEnable("GwApplication", LOG_LEVEL_ALL);
-    LogComponentEnable("ClientApplication", LOG_LEVEL_ALL);
-    LogComponentEnable("CachingControllerApplication", LOG_LEVEL_ALL);
-    //LogComponentEnable("VideoDataSource", LOG_LEVEL_ALL);
+    //LogComponentEnable("TcpSocketBase", LOG_LEVEL_ALL);
+    //LogComponentEnable("SVNF", LOG_LEVEL_ALL);
+    //LogComponentEnable("GwApplication", LOG_LEVEL_ALL);
+    //LogComponentEnable("ClientApplication", LOG_LEVEL_ALL);
+    //LogComponentEnable("CachingControllerApplication", LOG_LEVEL_ALL);
+    //LogComponentEnable("NscTcpSocketImpl", LOG_LEVEL_ALL);
     //LogComponentEnable("PacketSink", LOG_LEVEL_ALL);
+    //LogComponentEnable("VideoDataSource", LOG_LEVEL_ALL);
+    //LogComponentEnable("TcpTxBuffer", LOG_LEVEL_ALL);
+    //LogComponentEnable("TcpNewReno", LOG_LEVEL_ALL);
 
 
-    nGW = 10;
+
 
 
     NodeContainer gwNodes;
@@ -92,21 +174,17 @@ main(int argc, char *argv[]) {
     stack.Install(pop);
 
     //P2P configuration for LAN
-    PointToPointHelper pointToPointLan;
-    pointToPointLan.SetDeviceAttribute("DataRate", StringValue("100Mbps"));
-    pointToPointLan.SetChannelAttribute("Delay", StringValue("1ms"));
+
 
     Ipv4AddressHelper addressLanScheme;
-    addressLanScheme.SetBase("192.168.0.0", "255.255.255.0");
+    addressLanScheme.SetBase("11.0.0.0", "255.0.0.0");
 
 
     //P2P configuration for ROUTER -> CP
-    PointToPointHelper pointToPointCP;
-    pointToPointCP.SetDeviceAttribute("DataRate", StringValue("2Gbps"));
-    pointToPointCP.SetChannelAttribute("Delay", StringValue("200ms"));
+
 
     Ipv4AddressHelper addressP2P_Router_CP;
-    addressP2P_Router_CP.SetBase("192.168.1.0", "255.255.255.0");
+    addressP2P_Router_CP.SetBase("12.0.0.0", "255.0.0.0");
 
     NodeContainer routerCpContainer;
     routerCpContainer.Add(router);
@@ -121,12 +199,10 @@ main(int argc, char *argv[]) {
     const Ipv4Address cpIpV4Addr = routerCp_addrs.GetAddress(1);
 
     //P2P configuration for ROUTER -> POP
-    PointToPointHelper pointToPointPOP;
-    pointToPointPOP.SetDeviceAttribute("DataRate", StringValue("2Gbps"));
-    pointToPointPOP.SetChannelAttribute("Delay", StringValue("10ms"));
+
 
     Ipv4AddressHelper addressP2P_Router_POP;
-    addressP2P_Router_POP.SetBase("192.168.2.0", "255.255.255.0");
+    addressP2P_Router_POP.SetBase("13.0.0.0", "255.0.0.0");
 
     NodeContainer routerPOPContainer;
     routerPOPContainer.Add(router);
@@ -142,9 +218,7 @@ main(int argc, char *argv[]) {
 
 
     //CSMA Configuration for GW => Router
-    CsmaHelper csmaHelper;
-    csmaHelper.SetChannelAttribute("DataRate", StringValue("100Mbps"));
-    csmaHelper.SetChannelAttribute("Delay", TimeValue(MilliSeconds(10)));
+
 
     Ipv4AddressHelper wanAddressScheme;
     wanAddressScheme.SetBase("10.0.0.0", "255.0.0.0");
@@ -194,9 +268,12 @@ main(int argc, char *argv[]) {
     uint16_t dataSourcePort = 18082;
 
 
+    double currentStartTime = 0;
     for (int i = 0; i < nGW; i++) {
 
 
+        currentStartTime += ev->GetValue();
+        std::stringstream ss;
 
         // GATEWAY
         const Ipv4Address gwAddress = lanInterfaceContainers[i].GetAddress(1);
@@ -215,7 +292,7 @@ main(int argc, char *argv[]) {
         gwNodes.Get(i)->AddApplication(gwApp);
 
         //setup simulator start/end date
-        gwApp->SetStartTime(Seconds(3.));
+        gwApp->SetStartTime(Seconds(currentStartTime += ev->GetValue()));
         gwApp->SetStopTime(Seconds(END));
 
 
@@ -227,18 +304,32 @@ main(int argc, char *argv[]) {
                          InetSocketAddress(clientAddress, dataSourcePort));
 
         clientNodes.Get(i)->AddApplication(clientApp);
-        clientApp->SetStartTime(Seconds(5*(i+1)));
+
+
+        clientApp->SetStartTime(Seconds(currentStartTime));
         clientApp->SetStopTime(Seconds(END));
 
         PacketSinkHelper helper("ns3::TcpSocketFactory", InetSocketAddress(clientAddress, dataSourcePort));
         helper.Install(clientNodes.Get(i));
+
+
+        Ptr<PacketSink> clientSinkApp = DynamicCast<PacketSink>(clientNodes.Get(i)->GetApplication(1));
+        //clientNodes.Get(i)->GetId()s
+        std::ostringstream oss;
+        oss << "/NodeList/" << clientNodes.Get(i)->GetId() << "/ApplicationList/" << 1 << "/$ns3::PacketSink/Rx";
+        Config::Connect(oss.str(), MakeCallback(&PacketAddressTrace));
+        ClientStat stats;
+        stats.startDate = Seconds(currentStartTime);
+        stats.stopDate = Seconds(currentStartTime);
+        clientStats[clientNodes.Get(i)->GetId()] = stats;
+
 
     }
 
     //POP Cache Controller
     Ptr<labri::CachingControllerApplication> popApp = CreateObject<labri::CachingControllerApplication>();
     popApp->Setup(
-                 InetSocketAddress(popIpV4Addr, configurationPort));
+            InetSocketAddress(popIpV4Addr, configurationPort));
 
     pop->AddApplication(popApp);
     popApp->SetStartTime(Seconds(0));
@@ -246,7 +337,7 @@ main(int argc, char *argv[]) {
 
     //CP Data Source
     Ptr<labri::VideoDataSource> cpDSApp = CreateObject<labri::VideoDataSource>();
-    cpDSApp->Setup(InetSocketAddress(cpIpV4Addr, signalingPort));
+    cpDSApp->Setup(InetSocketAddress(cpIpV4Addr, signalingPort), DataRate(cpDataRate));
     cp->AddApplication(cpDSApp);
     cpDSApp->SetStartTime(Seconds(0));
     cpDSApp->SetStopTime(Seconds(END));
@@ -254,23 +345,41 @@ main(int argc, char *argv[]) {
 
     //POP Data Source
     Ptr<labri::VideoDataSource> popDSApp = CreateObject<labri::VideoDataSource>();
-    popDSApp->Setup(InetSocketAddress(popIpV4Addr, signalingPort));
+    popDSApp->Setup(InetSocketAddress(popIpV4Addr, signalingPort), DataRate(popDataRate));
     pop->AddApplication(popDSApp);
     popDSApp->SetStartTime(Seconds(0));
     popDSApp->SetStopTime(Seconds(END));
 
 
-
     Ipv4GlobalRoutingHelper::PopulateRoutingTables();
 
 
-    pointToPointCP.EnablePcapAll("CP");
-    pointToPointLan.EnablePcapAll("Lan");
-    pointToPointPOP.EnablePcapAll("POP");
+    //pointToPointCP.EnablePcapAll("CP");
+    //pointToPointLan.EnablePcapAll("Lan");
+    //pointToPointPOP.EnablePcapAll("POP");
 
+
+
+
+    //pointToPointLan.EnablePcap("CP",routerCPDeviceContainer.Get(1),false);
 
     Simulator::Run();
+
+    for (int i = 0; i < nGW; i++) {
+        Ptr<PacketSink> clientApp = DynamicCast<PacketSink>(clientNodes.Get(i)->GetApplication(1));
+        std::stringstream ss;
+        Time duration =
+                clientStats[clientNodes.Get(i)->GetId()].stopDate - clientStats[clientNodes.Get(i)->GetId()].startDate;
+        uint32_t totalSize = clientStats[clientNodes.Get(i)->GetId()].totalSize;
+        ss << "client" << clientNodes.Get(i)->GetId() << " " << clientApp->GetTotalRx() << " (" << totalSize << ")" <<
+        " in " <<
+        duration.As(Time::S) << " " << clientApp->GetTotalRx() / duration.GetSeconds() / 1000 << " kBps";
+        NS_LOG_UNCOND(ss.str());
+    }
+
     Simulator::Destroy();
+
+
     return 0;
 }
 

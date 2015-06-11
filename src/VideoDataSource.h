@@ -16,14 +16,27 @@
 #include <ns3/pcap-file-wrapper.h>
 #include <ns3/ipv4-address.h>
 #include <string>
+#include <ns3/traced-value.h>
 
 
 using namespace ns3;
 namespace  labri {
+
+    class ClientStats {
+    public:
+        uint32_t totalTxBytes;
+        uint32_t currentTxBytes;
+
+
+    };
+
     class VideoDataSource : public Application {
 
     public:
-        void Setup(InetSocketAddress control);
+
+        static TypeId GetTypeId(void);
+
+        void Setup(InetSocketAddress control, DataRate channelDataRate);
 
         virtual void StartApplication(void);
 
@@ -39,9 +52,11 @@ namespace  labri {
 
         Ptr<Socket> m_controlSocket;
 
-        DataRate m_channelRate;
-        DataRate remainingRate;
+        TracedValue<uint32_t> m_channelRate;
+        uint32_t remainingRate;
+        static const uint32_t writeSize = 1040;
 
+        std::map<Ptr<Socket>,ClientStats> m_socketData;
 
         bool HandleConnectionRequest(Ptr<Socket>, const Address &);
 
@@ -57,6 +72,10 @@ namespace  labri {
         void SendPacket(Ptr<Socket> clientSocket, unsigned long total, unsigned long packetSize, DataRate dataRate);
 
         void ScheduleTx(Ptr<Socket> clientSocket, unsigned long total, DataRate dataRate);
+
+        void WriteUntilBufferFull(Ptr<Socket> localSocket, uint32_t txSpace);
+
+        void pourData(Ptr<Socket> clientSinkSocket);
     };
 }
 
