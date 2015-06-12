@@ -55,6 +55,22 @@ DataRateTrace(uint32_t oldValue, uint32_t newValue) {
     std::cout << "Traced " << oldValue << " to " << newValue << std::endl;
 }
 
+class PlotData{
+public:
+    uint32_t totalSizeTransmitted=0;
+
+
+};
+std::map<std::string,std::map<int, PlotData> > cpDr;
+
+void PacketTraceCallBack(std::string context, const Ptr<const Packet> packet) {
+
+    int second = (int) std::round(Simulator::Now().GetSeconds());
+    if (!   cpDr[context].count(second)) {
+        cpDr[context][second] = PlotData();
+    }
+    cpDr[context][second].totalSizeTransmitted+=packet->GetSize();
+}
 
 class ClientStat {
 
@@ -62,6 +78,8 @@ public:
     Time startDate;
     Time stopDate;
     uint32_t totalSize = 0;
+    uint32_t dataSourceId;
+
 
 };
 
@@ -69,21 +87,9 @@ std::map<int, ClientStat> clientStats;
 
 void PacketAddressTrace(std::string context, const Ptr<const Packet> packet, const Address &address) {
 
-    boost::regex expression(
-            "/NodeList/(\\d+)/.*");
-
-    std::string::const_iterator start, end;
-    start = context.begin();
-    end = context.end();
-    boost::match_results<std::string::const_iterator> what;
-    boost::match_flag_type flags = boost::match_default;
-    if (regex_search(start, end, what, expression, flags)) {
-        std::string s(what[1].first, what[1].second);
-        clientStats[boost::lexical_cast<int>(s)].stopDate = Simulator::Now();
-        clientStats[boost::lexical_cast<int>(s)].totalSize += packet->GetSize();
-
-        return;
-    }
+    int s = boost::lexical_cast<int>(context.substr(10, context.substr(10, context.length() - 10).find("/")));
+    clientStats[s].stopDate = Simulator::Now();
+    clientStats[s].totalSize += packet->GetSize();
 
 
 }
@@ -91,51 +97,54 @@ void PacketAddressTrace(std::string context, const Ptr<const Packet> packet, con
 int
 main(int argc, char *argv[]) {
     bool verbose = true;
-    uint32_t nGW = 2;
+    uint32_t nGW = 0;
     const int END = INT_MAX;
 
 
     const std::string popDataRate("1Gbps");
     const std::string cpDataRate("1Gbps");
 
-    nGW = 50;
+    CommandLine cmd;
+    cmd.AddValue("nGW", "Number of \"extra\" CSMA nodes/devices", nGW);
 
-    //Config::SetDefault ("ns3::TcpSocket::SndBufSize", ns3::UintegerValue(100000));
-    //Config::SetDefault ("ns3::TcpSocket::RcvBufSize", ns3::UintegerValue(100000));
-    //Config::SetDefault ("ns3::TcpSocket::SegmentSize",ns3::UintegerValue(1460));
+    cmd.Parse(argc, argv);
+
+
+
+    //Config::SetDefault("ns3::TcpSocket::SndBufSize", ns3::UintegerValue(100000));
+    //Config::SetDefault("ns3::TcpSocket::RcvBufSize", ns3::UintegerValue(100000));
+    //Config::SetDefault("ns3::TcpSocket::SegmentSize", ns3::UintegerValue(1460));
 
 
     //LAN
     PointToPointHelper pointToPointLan;
     pointToPointLan.SetDeviceAttribute("DataRate", StringValue("1Gbps"));
-    pointToPointLan.SetChannelAttribute("Delay", StringValue("1ms"));
+    pointToPointLan.SetChannelAttribute("Delay", StringValue("0.2ms"));
 
     //CSMA
     CsmaHelper csmaHelper;
     csmaHelper.SetChannelAttribute("DataRate", StringValue("1Gbps"));
-    csmaHelper.SetChannelAttribute("Delay", StringValue("1ms"));
+    csmaHelper.SetChannelAttribute("Delay", StringValue("1ns"));
 
     //POP
     PointToPointHelper pointToPointPOP;
     pointToPointPOP.SetDeviceAttribute("DataRate", DataRateValue(DataRate(popDataRate)));
-    pointToPointPOP.SetChannelAttribute("Delay", StringValue("5ms"));
+    pointToPointPOP.SetChannelAttribute("Delay", StringValue("1ns"));
 
     //CP
     PointToPointHelper pointToPointCP;
     pointToPointCP.SetDeviceAttribute("DataRate", DataRateValue(DataRate(cpDataRate)));
-    pointToPointCP.SetChannelAttribute("Delay", StringValue("10ms"));
+    pointToPointCP.SetChannelAttribute("Delay", StringValue("1ns"));
 
 
     Ptr<ExponentialRandomVariable> ev = CreateObject<ExponentialRandomVariable>();
-    ev->SetAttribute("Mean", DoubleValue(0.2));
+    ev->SetAttribute("Mean", DoubleValue(5));
     ev->SetAttribute("Bound", DoubleValue(100.));
 
 
-    CommandLine cmd;
-    cmd.AddValue("nCsma", "Number of \"extra\" CSMA nodes/devices", nGW);
-    cmd.AddValue("verbose", "Tell echo applications to log if true", verbose);
 
-    cmd.Parse(argc, argv);
+
+
 
     //LogComponentEnable("TcpSocketBase", LOG_LEVEL_ALL);
     //LogComponentEnable("SVNF", LOG_LEVEL_ALL);
@@ -362,6 +371,17 @@ main(int argc, char *argv[]) {
 
 
     //pointToPointLan.EnablePcap("CP",routerCPDeviceContainer.Get(1),false);
+    std::ostringstream oss;
+    oss << "/NodeList/"<< cp->GetId()<< "/DeviceList/1/$ns3::PointToPointNetDevice/PhyTxEnd";
+    std::string cpConfigPath=oss.str();
+    Config::Connect(cpConfigPath, MakeCallback(&PacketTraceCallBack));
+    oss.clear();
+    oss << "/NodeList/"<< pop->GetId()<< "/DeviceList/1/$ns3::PointToPointNetDevice/PhyTxEnd";
+    std::string popConfigPath=oss.str();
+    Config::Connect(popConfigPath, MakeCallback(&PacketTraceCallBack));
+
+    cpDr[cpConfigPath]=std::map<int,PlotData>();
+    cpDr[popConfigPath]=std::map<int,PlotData>();
 
     Simulator::Run();
 
@@ -375,7 +395,15 @@ main(int argc, char *argv[]) {
         " in " <<
         duration.As(Time::S) << " " << clientApp->GetTotalRx() / duration.GetSeconds() / 1000 << " kBps";
         NS_LOG_UNCOND(ss.str());
+
     }
+
+    std::ostringstream gnuplot;
+    for(std::map<int,PlotData>::const_iterator it=cpDr[cpConfigPath].begin();it!=cpDr[cpConfigPath].end();++it){
+
+        gnuplot << (*it).first << "\t" << (*it).second.totalSizeTransmitted << "\n";
+    }
+    std::cout << gnuplot.str() << std::endl;
 
     Simulator::Destroy();
 

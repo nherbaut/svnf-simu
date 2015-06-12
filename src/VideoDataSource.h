@@ -22,10 +22,11 @@
 using namespace ns3;
 namespace  labri {
 
-    class ClientStats {
+    class SocketStats {
     public:
         uint32_t totalTxBytes;
         uint32_t currentTxBytes;
+        uint32_t dataSourceId;
 
 
     };
@@ -55,8 +56,9 @@ namespace  labri {
         TracedValue<uint32_t> m_channelRate;
         uint32_t remainingRate;
         static const uint32_t writeSize = 1040;
+        char buff[writeSize];
 
-        std::map<Ptr<Socket>,ClientStats> m_socketData;
+        std::map<Ptr<Socket>, SocketStats> m_socketData;
 
         bool HandleConnectionRequest(Ptr<Socket>, const Address &);
 

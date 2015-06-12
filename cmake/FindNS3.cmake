@@ -1,7 +1,7 @@
 INCLUDE(SelectLibraryConfigurations)
 INCLUDE(FindPackageHandleStandardArgs)
 
-MESSAGE(${NS3_FIND_VERSION} "              " ${NS3_FIND_COMPONENTS})
+MESSAGE(${NS3_FIND_VERSION} "" ${NS3_FIND_COMPONENTS})
 
 # List of the valid ns${NS3_FIND_VERSION} components.
 SET(NS3_VALID_COMPONENTS
@@ -47,7 +47,7 @@ SET(NS3_VALID_COMPONENTS
 # Find the ns${NS3_FIND_VERSION} core library.
 
 FIND_LIBRARY(NS3_LIBRARIES
-	NAME libns${NS3_FIND_VERSION}-core-debug.so
+	NAME libns${NS3_FIND_VERSION}-core-debug.so libns${NS3_FIND_VERSION}-core-optimized.so
 	PATHS
 	/usr/local/lib/
 
@@ -115,10 +115,11 @@ ENDIF()
 
 # Try to find components
 IF(NS3_FOUND)
+
 	FOREACH(_component ${NS3_CHOSEN_COMPONENTS})
 
-		FIND_LIBRARY(${_component}_LIBRARY
-            			NAME
+		FIND_LIBRARY(${_component}_LIBRARY_DEBUG
+            			NAMES
             			lib${_component}-debug.so
             			PATHS
             			${NS3_LIBRARY_DIR}
@@ -126,8 +127,24 @@ IF(NS3_FOUND)
 
 
 		MARK_AS_ADVANCED(${_component}_LIBRARY)
-		LIST(APPEND NS3_LIBRARIES ${${_component}_LIBRARY})
+		LIST(APPEND NS3_LIBRARIES_DEBUG ${${_component}_LIBRARY_DEBUG})
 	ENDFOREACH()
+
+	FOREACH(_component ${NS3_CHOSEN_COMPONENTS})
+
+
+    		FIND_LIBRARY(${_component}_LIBRARY_RELEASE
+                			NAMES
+                			lib${_component}-optimized.so
+                			PATHS
+                			${NS3_LIBRARY_DIR}
+                		)
+
+
+    		MARK_AS_ADVANCED(${_component}_LIBRARY)
+    		LIST(APPEND NS3_LIBRARIES_RELEASE ${${_component}_LIBRARY_RELEASE})
+    	ENDFOREACH()
+
 ENDIF()
 
 #FIND_PACKAGE_HANDLE_STANDARD_ARGS(NS3 DEFAULT_MSG NS3_LIBRARIES NS3_INCLUDE_DIR)

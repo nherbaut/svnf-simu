@@ -97,10 +97,11 @@ namespace labri {
         clientSinkSocket->Bind();
         clientSinkSocket->Connect(clientSinkAddress);
 
-        ClientStats stats;
+        SocketStats stats;
         stats.currentTxBytes = 0;
-        stats.totalTxBytes = 10000;
+        stats.totalTxBytes = 10000000;
         m_socketData[clientSinkSocket] = stats;
+        stats.dataSourceId = this->GetNode()->GetId();
 
         //DataRate video = DataRate("320kbps");
         Simulator::ScheduleNow(&VideoDataSource::pourData, this, clientSinkSocket);
@@ -115,7 +116,9 @@ namespace labri {
     }
 
 
+
     void VideoDataSource::WriteUntilBufferFull(Ptr<Socket> localSocket, uint32_t txSpace) {
+
 
         while (m_socketData[localSocket].currentTxBytes < m_socketData[localSocket].totalTxBytes &&
                localSocket->GetTxAvailable() > 0) {
@@ -125,8 +128,8 @@ namespace labri {
             toWrite = std::min(toWrite, left);
             toWrite = std::min(toWrite, localSocket->GetTxAvailable());
 
-            Ptr<Packet> packet = Create<Packet>(toWrite);
-            int amountSent = localSocket->Send(packet);
+
+            int amountSent = localSocket->Send(reinterpret_cast<const uint8_t*>(buff),toWrite,0);
             if (amountSent < 0) {
                 // we will be called again when new tx space becomes available.
                 return;
@@ -135,8 +138,7 @@ namespace labri {
         }
 
         localSocket->Close();
-        NS_LOG_FUNCTION(this <<  Simulator::Now().As(Time::Unit::S) <<
-                        m_socketData[localSocket].currentTxBytes << m_socketData[localSocket].totalTxBytes);
+        //NS_LOG_FUNCTION(this << Simulator::Now().As(Time::Unit::S) <<                      m_socketData[localSocket].currentTxBytes << m_socketData[localSocket].totalTxBytes);
 
 
     }
