@@ -40,6 +40,7 @@ namespace labri {
     void CachingControllerApplication::Setup(
             InetSocketAddress configurationAddress) {
 
+        NS_LOG_FUNCTION (this << configurationAddress.GetIpv4());
         m_configuration = configurationAddress;
     }
 
@@ -51,6 +52,7 @@ namespace labri {
 
 
     bool CachingControllerApplication::HandleConnectionRequest(Ptr<Socket> socket, const Address &from) {
+        NS_LOG_FUNCTION(this);
         return true;
     }
 
@@ -60,9 +62,9 @@ namespace labri {
 
         m_socketConfiguration = Socket::CreateSocket(GetNode(), TcpSocketFactory::GetTypeId());
         Ptr<TcpNewReno> newReno = DynamicCast<TcpNewReno>(m_socketConfiguration);
-        Config::SetDefault ("ns3::DropTailQueue::MaxPackets", StringValue ("80"));
+        /*Config::SetDefault ("ns3::DropTailQueue::MaxPackets", StringValue ("80"));
         newReno->SetAttribute("SndBufSize",ns3::UintegerValue(1000000));
-        newReno->SetAttribute("SegmentSize",ns3::UintegerValue(1460));
+        newReno->SetAttribute("SegmentSize",ns3::UintegerValue(1460));*/
 
 
         m_socketConfiguration->Bind(m_configuration);
@@ -98,10 +100,12 @@ namespace labri {
 
 
     void CachingControllerApplication::HandlePeerClose(Ptr<Socket> socket) {
+        NS_LOG_FUNCTION(this);
         m_acceptedSockets.remove(socket);
     }
 
     void CachingControllerApplication::HandlePeerError(Ptr<Socket> socket) {
+        NS_LOG_FUNCTION(this);
         m_acceptedSockets.remove(socket);
     }
 
@@ -136,7 +140,7 @@ namespace labri {
 
     void CachingControllerApplication::HandleNewResourceAsked(
             const ClientDataFromDataSource& clientData) {
-
+        NS_LOG_FUNCTION(this);
         Time tNext(Seconds(10));
         Simulator::Schedule(tNext, &CachingControllerApplication::TranscodingAndDeployingDone, this,clientData);
 

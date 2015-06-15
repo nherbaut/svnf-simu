@@ -81,10 +81,12 @@ namespace labri {
     }
 
     void VideoDataSource::HandleSignalingAccept(Ptr<Socket> ptr, const Address &from) {
+        NS_LOG_FUNCTION(this);
         ptr->SetRecvCallback(MakeCallback(&VideoDataSource::HandleStreamingRequest, this));
     }
 
     void VideoDataSource::HandleStreamingRequest(Ptr<Socket> socket) {
+        NS_LOG_FUNCTION(this);
         std::ostringstream ss;
         socket->Recv()->CopyData(&ss, INT_MAX);
         const std::string clientQuery = ss.str();
@@ -122,7 +124,8 @@ namespace labri {
     }
 
 
-    char indice='a';
+    char indice = 'a';
+
     void VideoDataSource::WriteUntilBufferFull(Ptr<Socket> localSocket, uint32_t txSpace) {
         indice++;
 
@@ -134,15 +137,27 @@ namespace labri {
         double currentDataRate = current / (elapsedSecond);
 
 
-
         DataRate targetDataRate = ::g_clientData[m_socketIpMapping[localSocket]]->getTargetDataRate();
         if (currentDataRate > targetDataRate.GetBitRate() * 1.25) {
-            NS_LOG_FUNCTION( this << "we are too high" << currentDataRate << targetDataRate);
+
+
+            //unplug the callback for buffer space available
+            localSocket->SetSendCallback(MakeNullCallback<void, Ptr<Socket>, uint32_t>());
+            Time next(Seconds((  (1.0*current / targetDataRate.GetBitRate()) -elapsedSecond)));
+            NS_LOG_FUNCTION(this << elapsedSecond << " --> " << (  (1.0*current / targetDataRate.GetBitRate()) -elapsedSecond));
+            NS_LOG_FUNCTION(this << "we are too high (" << currentDataRate << " vs " << targetDataRate << ") rescheduling at " << next.GetSeconds());
+            Simulator::Schedule(next, &VideoDataSource::pourData, this, localSocket);
+            return;
 
 
         }
         else if ((currentDataRate < targetDataRate.GetBitRate() * 0.5) && elapsedSecond > 30) {
-            NS_LOG_FUNCTION( this << "we are too low" << currentDataRate << targetDataRate);
+            NS_LOG_FUNCTION(this << "we are too low" << currentDataRate << targetDataRate);
+            ::g_clientData[m_socketIpMapping[localSocket]]->setDropped(true);
+            localSocket->SetSendCallback(MakeNullCallback<void, Ptr<Socket>, uint32_t>());
+            localSocket->ShutdownSend();
+            localSocket->Close();
+
         }
 
 
@@ -168,7 +183,7 @@ namespace labri {
             std::memset(buff, indice, sizeof(buff));
 
             int amountSent = localSocket->Send(buff, sizeof(buff), 0);
-            delete []buff;
+            delete[]buff;
 
             if (amountSent < 0) {
 

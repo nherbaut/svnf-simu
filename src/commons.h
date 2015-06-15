@@ -117,6 +117,15 @@ public:
     }
 
 
+    bool isDropped() const {
+        return m_dropped;
+    }
+
+    void setDropped(bool dropped) {
+        ClientDataFromDataSource::m_dropped = dropped;
+    }
+
+
 private:
     std::string m_payloadId;
     uint64_t m_totalSize;
@@ -125,6 +134,8 @@ private:
     Time m_endDate;
     uint64_t m_currentTxBytes;
     std::string m_ip;
+
+    bool m_dropped = false;
 
 
 };

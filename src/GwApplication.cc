@@ -53,6 +53,8 @@ namespace ns3 {
                               InetSocketAddress signalingPOPAddr,
                               InetSocketAddress signalingCPAddr,
                               InetSocketAddress configurationPOPAddr) {
+
+        NS_LOG_FUNCTION(this << local.GetIpv4() << signalingPOPAddr.GetIpv4()<< signalingCPAddr.GetIpv4()<< configurationPOPAddr.GetIpv4());
         m_local = local;
         m_signalingPOPAddr = signalingPOPAddr;
         m_signalingCPAddr = signalingCPAddr;

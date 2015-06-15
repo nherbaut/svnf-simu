@@ -29,6 +29,7 @@
 #include <ns3/config.h>
 #include <boost/regex.hpp>
 #include <boost/lexical_cast.hpp>
+#include "ns3/stats-module.h"
 #include "commons.h"
 
 //
@@ -106,7 +107,7 @@ main(int argc, char *argv[]) {
 
     char popDataRate[30] = "100kbps";
     char cpDataRate[30] = "100kbps";
-    uint32_t payloadSize=100000;
+    uint32_t payloadSize = 100000;
 
     CommandLine cmd;
     cmd.AddValue("nGW", "Number of \"extra\" CSMA nodes/devices", nGW);
@@ -149,24 +150,36 @@ main(int argc, char *argv[]) {
     ev->SetAttribute("Mean", DoubleValue(mat));
     ev->SetAttribute("Bound", DoubleValue(100.));
 
+    Ptr<ParetoRandomVariable> pv = CreateObject<ParetoRandomVariable>();
+    pv->SetAttribute("Mean", DoubleValue(payloadSize));
+    pv->SetAttribute("Shape", DoubleValue(3));
+    pv->SetAttribute("Bound", DoubleValue(10 * payloadSize));
 
 
 
 
 
+    //LogComponentEnable("Ipv4StaticRouting", LOG_LEVEL_ALL);
     //LogComponentEnable("TcpSocketBase", LOG_LEVEL_ALL);
     //LogComponentEnable("SVNF", LOG_LEVEL_ALL);
     //LogComponentEnable("GwApplication", LOG_LEVEL_ALL);
-    //LogComponentEnable("ClientApplication", LOG_LEVEL_ALL);
+   //LogComponentEnable("ClientApplication", LOG_LEVEL_ALL);
     //LogComponentEnable("CachingControllerApplication", LOG_LEVEL_ALL);
     //LogComponentEnable("NscTcpSocketImpl", LOG_LEVEL_ALL);
     //LogComponentEnable("PacketSink", LOG_LEVEL_ALL);
     //LogComponentEnable("VideoDataSource", LOG_LEVEL_ALL);
     //LogComponentEnable("TcpTxBuffer", LOG_LEVEL_ALL);
-    //LogComponentEnable("TcpNewReno", LOG_LEVEL_ALL);
+    //LogComponentEnable("TcpNewReno", LOG_LEVEL_ALL);$
+    //LogComponentEnable("Ipv4StaticRouting", LOG_LEVEL_ALL);
 
 
 
+    ///////////////////////////////////////////////::
+    // BUILDING THE TOPOLOGY
+    ///////////////////////////////////////////////
+
+
+    Ipv4StaticRoutingHelper ipv4RoutingHelper;
 
 
     NodeContainer gwNodes;
@@ -251,10 +264,13 @@ main(int argc, char *argv[]) {
     Ipv4InterfaceContainer csmaInterfaces;
     csmaInterfaces = wanAddressScheme.Assign(wanDevices);
 
+    Ipv4Address routerWanIp = csmaInterfaces.GetAddress(0);
+
 
     Ipv4InterfaceContainer lanInterfaceContainers[nGW];
     //now connect the peer to the gw
     for (int i = 0; i < nGW; i++) {
+
         NodeContainer lan;
         lan.Add(clientNodes.Get(i));
         lan.Add(gwNodes.Get(i));
@@ -263,11 +279,97 @@ main(int argc, char *argv[]) {
         NetDeviceContainer lanDevices;
         lanDevices = pointToPointLan.Install(lan);
         lanInterfaceContainers[i] = addressLanScheme.Assign(lanDevices);
+        Ipv4Address gwAddress = lanInterfaceContainers[i].GetAddress(1);
+        Ipv4Address clientAddress = lanInterfaceContainers[i].GetAddress(0);
+
+        std::cout <<  "gw=" << gwAddress << " & " << csmaInterfaces.GetAddress(i+1) << " cl=" <<  clientAddress << std::endl;
+
+
+        //client to pop and cp via gw
+        {
+            Ptr<Ipv4StaticRouting> staticRouteClient = ipv4RoutingHelper.GetStaticRouting(
+                    lanInterfaceContainers[i].Get(0).first);
+            staticRouteClient->AddNetworkRouteTo(Ipv4Address("13.0.0.0"), Ipv4Mask("255.0.0.0"), gwAddress, 1, 0);
+            staticRouteClient->AddNetworkRouteTo(Ipv4Address("12.0.0.0"), Ipv4Mask("255.0.0.0"), gwAddress, 1, 0);
+
+
+
+
+        }
+
+
+        {
+            Ptr<Ipv4StaticRouting> staticRouteClient = ipv4RoutingHelper.GetStaticRouting(
+                    lanInterfaceContainers[i].Get(1).first);
+            staticRouteClient->AddNetworkRouteTo(Ipv4Address("13.0.0.0"), Ipv4Mask("255.0.0.0"), routerWanIp, 1, 0);
+            staticRouteClient->AddNetworkRouteTo(Ipv4Address("12.0.0.0"), Ipv4Mask("255.0.0.0"), routerWanIp, 1, 0);
+
+
+
+
+        }
+
+
+    }
+
+
+    //POP to client via router
+    {
+        Ptr<Ipv4StaticRouting> staticRoutePOP = ipv4RoutingHelper.GetStaticRouting(routerPop_addrs.Get(1).first);
+        staticRoutePOP->AddNetworkRouteTo(Ipv4Address("11.0.0.0"), Ipv4Mask("255.0.0.0"), routerPop_addrs.GetAddress(0),
+                                          1, 0);
+        staticRoutePOP->AddNetworkRouteTo(Ipv4Address("10.0.0.2"), Ipv4Mask("255.0.0.0"), routerPop_addrs.GetAddress(0),
+                                          1, 0);
+
+
+
+
 
     }
 
 
 
+    //CP to client via router
+    {
+        Ptr<Ipv4StaticRouting> staticRouteCP = ipv4RoutingHelper.GetStaticRouting(routerCp_addrs.Get(1).first);
+        staticRouteCP->AddNetworkRouteTo(Ipv4Address("11.0.0.0"), Ipv4Mask("255.0.0.0"), routerCp_addrs.GetAddress(0),
+                                         1, 0);
+        staticRouteCP->AddNetworkRouteTo(Ipv4Address("10.0.0.2"), Ipv4Mask("255.0.0.0"), routerCp_addrs.GetAddress(0),
+                                          1, 0);
+
+
+
+
+    }
+
+
+
+    //Router to client via GW
+    {
+
+
+        Ptr<Ipv4StaticRouting> staticRouterouter = ipv4RoutingHelper.GetStaticRouting(csmaInterfaces.Get(0).first);
+        for (int i = 0; i < nGW; i++) {
+
+
+            staticRouterouter->AddNetworkRouteTo(lanInterfaceContainers[i].GetAddress(0), Ipv4Mask("255.255.255.255"), csmaInterfaces.GetAddress(i + 1),
+                                             3, 0);
+
+
+
+
+
+
+
+        }
+
+/*
+        std::stringstream ssx;
+        Ptr<OutputStreamWrapper> wrapper = Create<OutputStreamWrapper>(&ssx);
+        staticRouterouter->PrintRoutingTable(wrapper);
+        std::cout << ssx.str() << std::endl;
+        /**/
+    }
 
     ///////////////////////////////////////////:
     // NOW THE APPLICATION PART
@@ -316,7 +418,7 @@ main(int argc, char *argv[]) {
 
         // CLIENT
         //an application to trigger the download from a datasource
-        ClientDataFromDataSource *cdfs = new ClientDataFromDataSource("abc", payloadSize, DataRate("20bps"));
+        ClientDataFromDataSource *cdfs = new ClientDataFromDataSource("abc", pv->GetInteger(), DataRate("320kbps"));
         cdfs->setIp(clientAddress);
         cdfs->setStartDate(Seconds(currentStartTime));
         cdfs->setEndDate(END);
@@ -378,14 +480,18 @@ main(int argc, char *argv[]) {
     popDSApp->SetStopTime(END);
 
 
-    Ipv4GlobalRoutingHelper::PopulateRoutingTables();
+    std::cout << "computing routing" << std::endl;
+
+    //Ipv4GlobalRoutingHelper::PopulateRoutingTables();
 
 
-    //pointToPointCP.EnablePcapAll("CP");
-    //pointToPointLan.EnablePcapAll("Lan");
-    //pointToPointPOP.EnablePcapAll("POP");
+
+    std::cout << "computing routing done" << std::endl;
 
 
+    pointToPointCP.EnablePcapAll("CP");
+    pointToPointLan.EnablePcapAll("Lan");
+    pointToPointPOP.EnablePcapAll("POP");
 
 
     pointToPointLan.EnablePcap("CP", routerCPDeviceContainer.Get(1), false);
@@ -400,8 +506,9 @@ main(int argc, char *argv[]) {
     std::string popConfigPath = oss.str();
     Config::Connect(popConfigPath, MakeCallback(&PacketTraceCallBackPOP));
 
-
+    std::cout << "sim run" << std::endl;
     Simulator::Run();
+    std::cout << "sim ran" << std::endl;
 
     for (int i = 0; i < nGW; i++) {
         Ptr<PacketSink> clientApp = DynamicCast<PacketSink>(clientNodes.Get(i)->GetApplication(1));
@@ -416,7 +523,6 @@ main(int argc, char *argv[]) {
 
     }
 
-    std::ostringstream gnuplot;
 
     std::vector<int> keys;
     transform(cpDr.begin(), cpDr.end(), back_inserter(keys), RetrieveKey());
@@ -424,6 +530,9 @@ main(int argc, char *argv[]) {
 
     std::sort(keys.begin(), keys.end());
     keys.erase(std::unique(keys.begin(), keys.end()), keys.end());
+
+    std::ofstream ofs("server-loads.csv", std::ofstream::out);
+
 
     for (std::vector<int>::const_iterator it = keys.begin(); it != keys.end(); ++it) {
 
@@ -437,11 +546,21 @@ main(int argc, char *argv[]) {
         if (popDr.count(*it)) {
             popValue = popDr[*it].totalSizeTransmitted;
         }
-        gnuplot << (*it) << "\t" << cpValue << "\t" << popValue << std::endl;
+        ofs << (*it) << "\t" << cpValue << "\t" << popValue << std::endl;
 
 
     }
-    std::cout << gnuplot.str() << std::endl;
+    ofs.close();
+
+    int countDropped = 0;
+    for (std::map<std::string, ClientDataFromDataSource *>::const_iterator itr = g_clientData.begin();
+         itr != g_clientData.end(); ++itr) {
+        if ((*itr).second->isDropped()) {
+            countDropped++;
+        }
+    }
+
+    std::cout << "dopped connections: " << countDropped << std::endl;
 
     Simulator::Destroy();
     for (std::map<std::string, ClientDataFromDataSource *>::const_iterator itr = g_clientData.begin();
