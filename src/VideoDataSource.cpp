@@ -99,7 +99,7 @@ namespace labri {
 
         SocketStats stats;
         stats.currentTxBytes = 0;
-        stats.totalTxBytes = 10000000;
+        stats.totalTxBytes = 100000;
         m_socketData[clientSinkSocket] = stats;
         stats.dataSourceId = this->GetNode()->GetId();
 
@@ -116,7 +116,6 @@ namespace labri {
     }
 
 
-
     void VideoDataSource::WriteUntilBufferFull(Ptr<Socket> localSocket, uint32_t txSpace) {
 
 
@@ -128,8 +127,8 @@ namespace labri {
             toWrite = std::min(toWrite, left);
             toWrite = std::min(toWrite, localSocket->GetTxAvailable());
 
-
-            int amountSent = localSocket->Send(reinterpret_cast<const uint8_t*>(buff),toWrite,0);
+            Ptr<Packet> packet = Create<Packet>(toWrite);
+            int amountSent = localSocket->Send(packet);
             if (amountSent < 0) {
                 // we will be called again when new tx space becomes available.
                 return;

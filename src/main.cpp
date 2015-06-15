@@ -98,14 +98,16 @@ int
 main(int argc, char *argv[]) {
     bool verbose = true;
     uint32_t nGW = 0;
-    const int END = INT_MAX;
+    double mat=1;
+    Time END = Seconds(1000);
 
 
-    const std::string popDataRate("1Gbps");
-    const std::string cpDataRate("1Gbps");
+    const std::string popDataRate("100kbps");
+    const std::string cpDataRate("100kbps");
 
     CommandLine cmd;
     cmd.AddValue("nGW", "Number of \"extra\" CSMA nodes/devices", nGW);
+    cmd.AddValue("mat", "Mean arrival time for clients", mat);
 
     cmd.Parse(argc, argv);
 
@@ -138,7 +140,7 @@ main(int argc, char *argv[]) {
 
 
     Ptr<ExponentialRandomVariable> ev = CreateObject<ExponentialRandomVariable>();
-    ev->SetAttribute("Mean", DoubleValue(5));
+    ev->SetAttribute("Mean", DoubleValue(mat));
     ev->SetAttribute("Bound", DoubleValue(100.));
 
 
@@ -146,16 +148,16 @@ main(int argc, char *argv[]) {
 
 
 
-    //LogComponentEnable("TcpSocketBase", LOG_LEVEL_ALL);
+    LogComponentEnable("TcpSocketBase", LOG_LEVEL_ALL);
     //LogComponentEnable("SVNF", LOG_LEVEL_ALL);
-    //LogComponentEnable("GwApplication", LOG_LEVEL_ALL);
+    LogComponentEnable("GwApplication", LOG_LEVEL_ALL);
     //LogComponentEnable("ClientApplication", LOG_LEVEL_ALL);
     //LogComponentEnable("CachingControllerApplication", LOG_LEVEL_ALL);
     //LogComponentEnable("NscTcpSocketImpl", LOG_LEVEL_ALL);
-    //LogComponentEnable("PacketSink", LOG_LEVEL_ALL);
+    LogComponentEnable("PacketSink", LOG_LEVEL_ALL);
     //LogComponentEnable("VideoDataSource", LOG_LEVEL_ALL);
     //LogComponentEnable("TcpTxBuffer", LOG_LEVEL_ALL);
-    //LogComponentEnable("TcpNewReno", LOG_LEVEL_ALL);
+    LogComponentEnable("TcpNewReno", LOG_LEVEL_ALL);
 
 
 
@@ -267,7 +269,7 @@ main(int argc, char *argv[]) {
     // NOW THE APPLICATION PART
     //////////////////////////////////////////
 
-    std::stringstream ss;
+    std::ostringstream ss;
     ss << "\tpop is " << popIpV4Addr << "\n";
     ss << "\tCP is " << cpIpV4Addr << "\n";
     NS_LOG_UNCOND(ss.str().c_str());
@@ -280,9 +282,12 @@ main(int argc, char *argv[]) {
     double currentStartTime = 0;
     for (int i = 0; i < nGW; i++) {
 
-
+        std::ostringstream ss2;
         currentStartTime += ev->GetValue();
-        std::stringstream ss;
+
+        ss2 << "client" << i << "starts at" << currentStartTime;
+        NS_LOG_UNCOND(ss2 .str() );
+
 
         // GATEWAY
         const Ipv4Address gwAddress = lanInterfaceContainers[i].GetAddress(1);
@@ -301,8 +306,8 @@ main(int argc, char *argv[]) {
         gwNodes.Get(i)->AddApplication(gwApp);
 
         //setup simulator start/end date
-        gwApp->SetStartTime(Seconds(currentStartTime += ev->GetValue()));
-        gwApp->SetStopTime(Seconds(END));
+        gwApp->SetStartTime(Seconds(0));
+        gwApp->SetStopTime(END);
 
 
         // CLIENT
@@ -316,7 +321,7 @@ main(int argc, char *argv[]) {
 
 
         clientApp->SetStartTime(Seconds(currentStartTime));
-        clientApp->SetStopTime(Seconds(END));
+        clientApp->SetStopTime(END);
 
         PacketSinkHelper helper("ns3::TcpSocketFactory", InetSocketAddress(clientAddress, dataSourcePort));
         helper.Install(clientNodes.Get(i));
@@ -342,14 +347,14 @@ main(int argc, char *argv[]) {
 
     pop->AddApplication(popApp);
     popApp->SetStartTime(Seconds(0));
-    popApp->SetStopTime(Seconds(END));
+    popApp->SetStopTime(END);
 
     //CP Data Source
     Ptr<labri::VideoDataSource> cpDSApp = CreateObject<labri::VideoDataSource>();
     cpDSApp->Setup(InetSocketAddress(cpIpV4Addr, signalingPort), DataRate(cpDataRate));
     cp->AddApplication(cpDSApp);
     cpDSApp->SetStartTime(Seconds(0));
-    cpDSApp->SetStopTime(Seconds(END));
+    cpDSApp->SetStopTime(END);
 
 
     //POP Data Source
@@ -357,7 +362,7 @@ main(int argc, char *argv[]) {
     popDSApp->Setup(InetSocketAddress(popIpV4Addr, signalingPort), DataRate(popDataRate));
     pop->AddApplication(popDSApp);
     popDSApp->SetStartTime(Seconds(0));
-    popDSApp->SetStopTime(Seconds(END));
+    popDSApp->SetStopTime(END);
 
 
     Ipv4GlobalRoutingHelper::PopulateRoutingTables();
@@ -370,7 +375,7 @@ main(int argc, char *argv[]) {
 
 
 
-    //pointToPointLan.EnablePcap("CP",routerCPDeviceContainer.Get(1),false);
+    pointToPointLan.EnablePcap("CP",routerCPDeviceContainer.Get(1),false);
     std::ostringstream oss;
     oss << "/NodeList/"<< cp->GetId()<< "/DeviceList/1/$ns3::PointToPointNetDevice/PhyTxEnd";
     std::string cpConfigPath=oss.str();

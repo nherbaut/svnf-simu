@@ -73,7 +73,8 @@ namespace ns3 {
         NS_LOG_FUNCTION (this << clientQuery);
         const std::string resource = clientQuery.substr(0, clientQuery.find('\t'));
 
-        //if in pop, trigger download from pop, otherwise from CP and notify POP.
+        bool isManaged=false;
+
         if (std::find(m_handlerResources.begin(), m_handlerResources.end(), resource) != m_handlerResources.end()) {
             triggerDownloadFromPOP(clientQuery);
         }
@@ -125,10 +126,12 @@ namespace ns3 {
 
     void GwApplication::HandlePeerClose(Ptr<Socket> socket) {
         NS_LOG_FUNCTION (this << socket);
+
     }
 
     void GwApplication::HandlePeerError(Ptr<Socket> socket) {
         NS_LOG_FUNCTION (this << socket);
+
     }
 
 
@@ -139,11 +142,13 @@ namespace ns3 {
 
     void GwApplication::triggerDownloadFromPOP(std::string const resource) {
         NS_LOG_FUNCTION (this);
+
         this->triggerDownload(m_signalingPOPAddr, resource);
     }
 
     void GwApplication::triggerDownloadFromCP(std::string const resource) {
         NS_LOG_FUNCTION (this);
+
         this->triggerDownload(m_signalingCPAddr, resource);
     }
 
@@ -160,6 +165,7 @@ namespace ns3 {
 
 
     void GwApplication::notifyPOP(std::string const resource) {
+
         NS_LOG_FUNCTION (this << resource << resource.c_str() << resource.length());
 
 
@@ -182,7 +188,7 @@ namespace ns3 {
 
         boost::split(m_handlerResources, res, boost::is_any_of(";"));
 
-        //dumpConf();
+       // dumpConf();
 
 
     }
@@ -195,6 +201,8 @@ namespace ns3 {
         for (std::vector<std::string>::const_iterator it = m_handlerResources.begin();
              it != m_handlerResources.end(); ++it) {
             NS_LOG(LOG_LEVEL_DEBUG, *it);
+            std::cout << *it << std::endl;
+
         }
 
     }

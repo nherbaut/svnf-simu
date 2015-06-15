@@ -12,7 +12,8 @@
 #include <boost/algorithm/string.hpp>
 #include <ns3/tcp-newreno.h>
 
-
+#include <ns3/config.h>
+#include <ns3/string.h>
 namespace labri {
 
     NS_LOG_COMPONENT_DEFINE ("CachingControllerApplication");
@@ -61,11 +62,14 @@ namespace labri {
         NS_LOG_FUNCTION (this);
 
         m_socketConfiguration = Socket::CreateSocket(GetNode(), TcpSocketFactory::GetTypeId());
+        Ptr<TcpNewReno> newReno = DynamicCast<TcpNewReno>(m_socketConfiguration);
+        Config::SetDefault ("ns3::DropTailQueue::MaxPackets", StringValue ("80"));
+        newReno->SetAttribute("SndBufSize",ns3::UintegerValue(1000000));
+        newReno->SetAttribute("SegmentSize",ns3::UintegerValue(1460));
 
 
-
-        int status = m_socketConfiguration->Bind(m_configuration);
-        status = m_socketConfiguration->Listen();
+        m_socketConfiguration->Bind(m_configuration);
+        m_socketConfiguration->Listen();
         m_socketConfiguration->SetAcceptCallback(
                 MakeCallback(&CachingControllerApplication::HandleConnectionRequest, this),
                 MakeCallback(&CachingControllerApplication::HandleConfigurationAccept, this));
