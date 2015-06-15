@@ -26,7 +26,7 @@ src/VideoDataSource.cpp
 )
 
 
-add_executable(svnf_simu ${SOURCE_FILES})
+add_executable(svnf_simu ${SOURCE_FILES} src/commons.h)
 
 message("${CMAKE_BUILD_TYPE}------------")
 IF(${CMAKE_BUILD_TYPE} MATCHES "DEBUG")

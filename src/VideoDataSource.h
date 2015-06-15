@@ -22,14 +22,7 @@
 using namespace ns3;
 namespace  labri {
 
-    class SocketStats {
-    public:
-        uint32_t totalTxBytes;
-        uint32_t currentTxBytes;
-        uint32_t dataSourceId;
 
-
-    };
 
     class VideoDataSource : public Application {
 
@@ -58,7 +51,7 @@ namespace  labri {
         static const uint32_t writeSize = 1040;
         char buff[writeSize];
 
-        std::map<Ptr<Socket>, SocketStats> m_socketData;
+        std::map<Ptr<Socket>, std::string> m_socketIpMapping;
 
         bool HandleConnectionRequest(Ptr<Socket>, const Address &);
 
@@ -69,7 +62,7 @@ namespace  labri {
         void HandleSignalingAccept(Ptr<Socket>, const Address &);
 
 
-        void HandleStreamingRequest(Ptr<Socket> ptr);
+        void HandleStreamingRequest(Ptr<Socket> socket);
 
         void SendPacket(Ptr<Socket> clientSocket, unsigned long total, unsigned long packetSize, DataRate dataRate);
 

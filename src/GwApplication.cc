@@ -18,6 +18,7 @@
 #include <climits>
 #include <algorithm>
 #include <boost/algorithm/string.hpp>
+#include "commons.h"
 
 #include <bits/stream_iterator.h>
 
@@ -68,18 +69,18 @@ namespace ns3 {
         socket->Close();
 
 
-        const std::string clientQuery = buf.str();
+        ClientDataFromDataSource cdfs(buf.str());
 
-        NS_LOG_FUNCTION (this << clientQuery);
-        const std::string resource = clientQuery.substr(0, clientQuery.find('\t'));
+        NS_LOG_FUNCTION (this << cdfs.toString());
+        const std::string resource = cdfs.getPayloadId();
 
         bool isManaged=false;
 
         if (std::find(m_handlerResources.begin(), m_handlerResources.end(), resource) != m_handlerResources.end()) {
-            triggerDownloadFromPOP(clientQuery);
+            triggerDownloadFromPOP(buf.str());
         }
         else {
-            triggerDownloadFromCP(clientQuery);
+            triggerDownloadFromCP(buf.str());
             notifyPOP(resource);
 
         }

@@ -29,6 +29,7 @@
 #include <ns3/config.h>
 #include <boost/regex.hpp>
 #include <boost/lexical_cast.hpp>
+#include "commons.h"
 
 //
 // CLIENT --- GW---- \
@@ -42,48 +43,49 @@
 //
 
 
-
+#pragma GCC diagnostic ignored "-Wwrite-strings"
 
 
 using namespace ns3;
 
 
+std::map<std::string, ClientDataFromDataSource *> g_clientData;
+
+
 NS_LOG_COMPONENT_DEFINE ("SVNF");
+
 
 void
 DataRateTrace(uint32_t oldValue, uint32_t newValue) {
     std::cout << "Traced " << oldValue << " to " << newValue << std::endl;
 }
 
-class PlotData{
-public:
-    uint32_t totalSizeTransmitted=0;
 
+std::map<int, ServerPlotData> cpDr;
+std::map<int, ServerPlotData> popDr;
 
-};
-std::map<std::string,std::map<int, PlotData> > cpDr;
+void PacketTraceCallBackCP(std::string context, const Ptr<const Packet> packet) {
 
-void PacketTraceCallBack(std::string context, const Ptr<const Packet> packet) {
 
     int second = (int) std::round(Simulator::Now().GetSeconds());
-    if (!   cpDr[context].count(second)) {
-        cpDr[context][second] = PlotData();
+    if (!cpDr.count(second)) {
+        cpDr[second] = ServerPlotData();
     }
-    cpDr[context][second].totalSizeTransmitted+=packet->GetSize();
+    cpDr[second].totalSizeTransmitted += packet->GetSize();
 }
 
-class ClientStat {
+void PacketTraceCallBackPOP(std::string context, const Ptr<const Packet> packet) {
 
-public:
-    Time startDate;
-    Time stopDate;
-    uint32_t totalSize = 0;
-    uint32_t dataSourceId;
+    int second = (int) std::round(Simulator::Now().GetSeconds());
+    if (!popDr.count(second)) {
+        popDr[second] = ServerPlotData();
+    }
+    popDr[second].totalSizeTransmitted += packet->GetSize();
+}
 
 
-};
+std::map<int, ClientStatObservedFromMain> clientStats;
 
-std::map<int, ClientStat> clientStats;
 
 void PacketAddressTrace(std::string context, const Ptr<const Packet> packet, const Address &address) {
 
@@ -98,16 +100,20 @@ int
 main(int argc, char *argv[]) {
     bool verbose = true;
     uint32_t nGW = 0;
-    double mat=1;
+    double mat = 1;
     Time END = Seconds(1000);
 
 
-    const std::string popDataRate("100kbps");
-    const std::string cpDataRate("100kbps");
+    char popDataRate[30] = "100kbps";
+    char cpDataRate[30] = "100kbps";
+    uint32_t payloadSize=100000;
 
     CommandLine cmd;
     cmd.AddValue("nGW", "Number of \"extra\" CSMA nodes/devices", nGW);
     cmd.AddValue("mat", "Mean arrival time for clients", mat);
+    cmd.AddValue("pop", "Data Rate for POP", popDataRate);
+    cmd.AddValue("cp", "Data Rate for cp", cpDataRate);
+    cmd.AddValue("as", "payload average size", payloadSize);
 
     cmd.Parse(argc, argv);
 
@@ -148,16 +154,16 @@ main(int argc, char *argv[]) {
 
 
 
-    LogComponentEnable("TcpSocketBase", LOG_LEVEL_ALL);
+    //LogComponentEnable("TcpSocketBase", LOG_LEVEL_ALL);
     //LogComponentEnable("SVNF", LOG_LEVEL_ALL);
-    LogComponentEnable("GwApplication", LOG_LEVEL_ALL);
+    //LogComponentEnable("GwApplication", LOG_LEVEL_ALL);
     //LogComponentEnable("ClientApplication", LOG_LEVEL_ALL);
     //LogComponentEnable("CachingControllerApplication", LOG_LEVEL_ALL);
     //LogComponentEnable("NscTcpSocketImpl", LOG_LEVEL_ALL);
-    LogComponentEnable("PacketSink", LOG_LEVEL_ALL);
+    //LogComponentEnable("PacketSink", LOG_LEVEL_ALL);
     //LogComponentEnable("VideoDataSource", LOG_LEVEL_ALL);
     //LogComponentEnable("TcpTxBuffer", LOG_LEVEL_ALL);
-    LogComponentEnable("TcpNewReno", LOG_LEVEL_ALL);
+    //LogComponentEnable("TcpNewReno", LOG_LEVEL_ALL);
 
 
 
@@ -185,8 +191,6 @@ main(int argc, char *argv[]) {
     stack.Install(pop);
 
     //P2P configuration for LAN
-
-
     Ipv4AddressHelper addressLanScheme;
     addressLanScheme.SetBase("11.0.0.0", "255.0.0.0");
 
@@ -272,7 +276,7 @@ main(int argc, char *argv[]) {
     std::ostringstream ss;
     ss << "\tpop is " << popIpV4Addr << "\n";
     ss << "\tCP is " << cpIpV4Addr << "\n";
-    NS_LOG_UNCOND(ss.str().c_str());
+    //NS_LOG_UNCOND(ss.str().c_str());
 
     uint16_t signalingPort = 18080;
     uint16_t configurationPort = 18081;
@@ -286,7 +290,7 @@ main(int argc, char *argv[]) {
         currentStartTime += ev->GetValue();
 
         ss2 << "client" << i << "starts at" << currentStartTime;
-        NS_LOG_UNCOND(ss2 .str() );
+        //NS_LOG_UNCOND(ss2.str());
 
 
         // GATEWAY
@@ -312,10 +316,19 @@ main(int argc, char *argv[]) {
 
         // CLIENT
         //an application to trigger the download from a datasource
+        ClientDataFromDataSource *cdfs = new ClientDataFromDataSource("abc", payloadSize, DataRate("20bps"));
+        cdfs->setIp(clientAddress);
+        cdfs->setStartDate(Seconds(currentStartTime));
+        cdfs->setEndDate(END);
+        g_clientData[cdfs->getIp()] = cdfs;
+
+
         Ptr<labri::ClientApplication> clientApp = CreateObject<labri::ClientApplication>();
         clientApp->Setup(InetSocketAddress(gwAddress, signalingPort),
 
-                         InetSocketAddress(clientAddress, dataSourcePort));
+                         InetSocketAddress(clientAddress, dataSourcePort), cdfs
+
+        );
 
         clientNodes.Get(i)->AddApplication(clientApp);
 
@@ -332,7 +345,7 @@ main(int argc, char *argv[]) {
         std::ostringstream oss;
         oss << "/NodeList/" << clientNodes.Get(i)->GetId() << "/ApplicationList/" << 1 << "/$ns3::PacketSink/Rx";
         Config::Connect(oss.str(), MakeCallback(&PacketAddressTrace));
-        ClientStat stats;
+        ClientStatObservedFromMain stats;
         stats.startDate = Seconds(currentStartTime);
         stats.stopDate = Seconds(currentStartTime);
         clientStats[clientNodes.Get(i)->GetId()] = stats;
@@ -375,18 +388,18 @@ main(int argc, char *argv[]) {
 
 
 
-    pointToPointLan.EnablePcap("CP",routerCPDeviceContainer.Get(1),false);
-    std::ostringstream oss;
-    oss << "/NodeList/"<< cp->GetId()<< "/DeviceList/1/$ns3::PointToPointNetDevice/PhyTxEnd";
-    std::string cpConfigPath=oss.str();
-    Config::Connect(cpConfigPath, MakeCallback(&PacketTraceCallBack));
-    oss.clear();
-    oss << "/NodeList/"<< pop->GetId()<< "/DeviceList/1/$ns3::PointToPointNetDevice/PhyTxEnd";
-    std::string popConfigPath=oss.str();
-    Config::Connect(popConfigPath, MakeCallback(&PacketTraceCallBack));
+    pointToPointLan.EnablePcap("CP", routerCPDeviceContainer.Get(1), false);
 
-    cpDr[cpConfigPath]=std::map<int,PlotData>();
-    cpDr[popConfigPath]=std::map<int,PlotData>();
+    std::ostringstream oss;
+    oss << "/NodeList/" << cp->GetId() << "/DeviceList/1/$ns3::PointToPointNetDevice/PhyTxEnd";
+    std::string cpConfigPath = oss.str();
+    Config::Connect(cpConfigPath, MakeCallback(&PacketTraceCallBackCP));
+    oss.str("");
+    oss.clear();
+    oss << "/NodeList/" << pop->GetId() << "/DeviceList/1/$ns3::PointToPointNetDevice/PhyTxEnd";
+    std::string popConfigPath = oss.str();
+    Config::Connect(popConfigPath, MakeCallback(&PacketTraceCallBackPOP));
+
 
     Simulator::Run();
 
@@ -399,21 +412,47 @@ main(int argc, char *argv[]) {
         ss << "client" << clientNodes.Get(i)->GetId() << " " << clientApp->GetTotalRx() << " (" << totalSize << ")" <<
         " in " <<
         duration.As(Time::S) << " " << clientApp->GetTotalRx() / duration.GetSeconds() / 1000 << " kBps";
-        NS_LOG_UNCOND(ss.str());
+        //NS_LOG_UNCOND(ss.str());
 
     }
 
     std::ostringstream gnuplot;
-    for(std::map<int,PlotData>::const_iterator it=cpDr[cpConfigPath].begin();it!=cpDr[cpConfigPath].end();++it){
 
-        gnuplot << (*it).first << "\t" << (*it).second.totalSizeTransmitted << "\n";
+    std::vector<int> keys;
+    transform(cpDr.begin(), cpDr.end(), back_inserter(keys), RetrieveKey());
+    transform(popDr.begin(), popDr.end(), back_inserter(keys), RetrieveKey());
+
+    std::sort(keys.begin(), keys.end());
+    keys.erase(std::unique(keys.begin(), keys.end()), keys.end());
+
+    for (std::vector<int>::const_iterator it = keys.begin(); it != keys.end(); ++it) {
+
+        double popValue = 0;
+        double cpValue = 0;
+
+        if (cpDr.count(*it)) {
+            cpValue = cpDr[*it].totalSizeTransmitted;
+        }
+
+        if (popDr.count(*it)) {
+            popValue = popDr[*it].totalSizeTransmitted;
+        }
+        gnuplot << (*it) << "\t" << cpValue << "\t" << popValue << std::endl;
+
+
     }
     std::cout << gnuplot.str() << std::endl;
 
     Simulator::Destroy();
+    for (std::map<std::string, ClientDataFromDataSource *>::const_iterator itr = g_clientData.begin();
+         itr != g_clientData.end(); ++itr) {
+        delete (*itr).second;
+    }
 
 
     return 0;
 }
+
+
 
 

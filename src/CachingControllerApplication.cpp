@@ -14,6 +14,7 @@
 
 #include <ns3/config.h>
 #include <ns3/string.h>
+
 namespace labri {
 
     NS_LOG_COMPONENT_DEFINE ("CachingControllerApplication");
@@ -42,10 +43,6 @@ namespace labri {
         m_configuration = configurationAddress;
     }
 
-
-    void CachingControllerApplication::HandleRead(Ptr<Socket> socket) {
-
-    }
 
     void CachingControllerApplication::handleExistingResourceAsked(const std::string &str) {
         NS_LOG_FUNCTION(this);
@@ -117,7 +114,8 @@ namespace labri {
         NS_LOG_FUNCTION(this);
         std::ostringstream buf;
         HandleClientConfigurationInput->Recv()->CopyData(&buf, INT_MAX);
-        HandleNewResourceAsked(buf.str());
+        const ClientDataFromDataSource clientData(buf.str());
+        HandleNewResourceAsked(clientData);
 
 
 
@@ -137,15 +135,15 @@ namespace labri {
     }
 
     void CachingControllerApplication::HandleNewResourceAsked(
-            const std::string &res) {
+            const ClientDataFromDataSource& clientData) {
 
         Time tNext(Seconds(10));
-        Simulator::Schedule(tNext, &CachingControllerApplication::TranscodingAndDeployingDone, this,res);
+        Simulator::Schedule(tNext, &CachingControllerApplication::TranscodingAndDeployingDone, this,clientData);
 
     }
 
-    void CachingControllerApplication::TranscodingAndDeployingDone(const std::string &res){
-        this->m_hostedResources.insert(res);
+    void CachingControllerApplication::TranscodingAndDeployingDone(const ClientDataFromDataSource& clientData){
+        this->m_hostedResources.insert(clientData.getPayloadId());
         UpdateGwConfiguration();
     }
 }

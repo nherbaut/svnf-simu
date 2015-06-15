@@ -16,6 +16,7 @@
 #include <ns3/pcap-file-wrapper.h>
 #include <ns3/ipv4-address.h>
 #include <string>
+#include "commons.h"
 
 using namespace ns3;
 
@@ -44,7 +45,8 @@ namespace labri {
         InetSocketAddress m_configuration;
 
 
-        void handleNewResourceAsked(const std::string &str);
+        void HandleNewResourceAsked(const ClientDataFromDataSource& clientData);
+        void TranscodingAndDeployingDone(const ClientDataFromDataSource& clientData);
 
         void handleExistingResourceAsked(const std::string &str);
 
@@ -72,10 +74,9 @@ namespace labri {
 
         void UpdateGwConfiguration();
 
-        void HandleNewResourceAsked(
-                const std::string &);
 
-        void TranscodingAndDeployingDone(const std::string &);
+
+
     };
 
 }

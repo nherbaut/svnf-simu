@@ -15,15 +15,14 @@
 #include <ns3/log.h>
 #include <ns3/pcap-file-wrapper.h>
 
+#include "commons.h"
+
 using namespace ns3;
 
 namespace labri {
 
 
-
     NS_LOG_COMPONENT_DEFINE ("ClientApplication");
-
-
 
 
     class ClientApplication : public Application {
@@ -31,7 +30,7 @@ namespace labri {
 
     public:
 
-        ClientApplication() :  m_gwSignalingAddr(),m_clientDataSink(""){
+        ClientApplication() : m_gwSignalingAddr(), m_clientDataSink(""), m_clientData(0) {
 
         }
 
@@ -41,10 +40,11 @@ namespace labri {
 
 
         void Setup(Address SignalingAddr,
-                   InetSocketAddress clientDataSink) {
+                   InetSocketAddress clientDataSink, ClientDataFromDataSource* clientData) {
             m_gwSignalingAddr = SignalingAddr;
             m_clientDataSink = clientDataSink;
-
+            m_clientData = clientData;
+            m_clientData->setIp(clientDataSink.GetIpv4());
 
         }
 
@@ -53,13 +53,14 @@ namespace labri {
 
         Address m_gwSignalingAddr;
         InetSocketAddress m_clientDataSink;
+        ClientDataFromDataSource* m_clientData;
 
         int m_retry = 0;
 
         virtual void StartApplication(void) {
             NS_LOG_FUNCTION(this);
-            const std::string resource("abc");
-            askForDataSourceToGW(resource);
+
+            askForDataSourceToGW(m_clientData->toString());
 
 
         }
