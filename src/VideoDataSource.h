@@ -52,7 +52,7 @@ namespace  labri {
         static const uint32_t writeSize = 1040;
         char buff[writeSize];
 
-        std::map<Ptr<Socket>, std::string> m_socketIpMapping;
+        std::map<Ptr<Socket>, ClientDataFromDataSource *> m_socketIpMapping;
 
         bool HandleConnectionRequest(Ptr<Socket>, const Address &);
 

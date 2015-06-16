@@ -73,7 +73,7 @@ public:
 
     std::string toString() {
         std::stringstream s;
-        s << m_payloadId << " " << m_totalSize << " " << m_targetBitrate;
+        s << m_payloadId << " " << m_totalSize << " " << m_targetBitrate << " " << m_startDate.GetSeconds();
         return s.str();
     }
 

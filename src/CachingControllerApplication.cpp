@@ -73,6 +73,7 @@ namespace labri {
                 MakeCallback(&CachingControllerApplication::HandleConnectionRequest, this),
                 MakeCallback(&CachingControllerApplication::HandleConfigurationAccept, this));
 
+
         NS_LOG_FUNCTION (this << "callbacks registered");
 
 
@@ -122,32 +123,52 @@ namespace labri {
         HandleNewResourceAsked(clientData);
 
 
-
     }
 
     void CachingControllerApplication::UpdateGwConfiguration(
     ) {
         NS_LOG_FUNCTION(this);
-        const std::string updatedConf = this->serializeConf();
-        NS_LOG_FUNCTION(this << updatedConf);
-        Ptr<Packet> pkt = Create<Packet>(reinterpret_cast<const uint8_t *>(updatedConf.c_str()), updatedConf.length());
-        for (std::list<Ptr<Socket>>::const_iterator it = m_gatewaysConn.begin(); it != m_gatewaysConn.end(); ++it) {
-            Ptr<Socket> gw = *it;
-            gw->Send(pkt);
+        if (dirty) {
+            dirty = false;
+            const std::string updatedConf = this->serializeConf();
+
+
+            for (std::list<Ptr<Socket>>::const_iterator it = m_gatewaysConn.begin(); it != m_gatewaysConn.end(); ++it) {
+                Ptr<Socket> gw = *it;
+                gw->Send(reinterpret_cast<const uint8_t *>(updatedConf.c_str()), updatedConf.length(), 0);
+
+            }
+
         }
+
 
     }
 
     void CachingControllerApplication::HandleNewResourceAsked(
-            const ClientDataFromDataSource& clientData) {
+            const ClientDataFromDataSource &clientData) {
         NS_LOG_FUNCTION(this);
-        Time tNext(Seconds(10));
-        Simulator::Schedule(tNext, &CachingControllerApplication::TranscodingAndDeployingDone, this,clientData);
+
+        if (this->m_hostedResources.count(clientData.getPayloadId()) == 0 &&
+            this->m_PendingResources.count(clientData.getPayloadId()) == 0) {
+            m_PendingResources.insert(clientData.getPayloadId());
+            Simulator::Schedule(Seconds(10), &CachingControllerApplication::TranscodingAndDeployingDone, this,
+                                clientData);
+        }
+
 
     }
 
-    void CachingControllerApplication::TranscodingAndDeployingDone(const ClientDataFromDataSource& clientData){
+    void CachingControllerApplication::TranscodingAndDeployingDone(const ClientDataFromDataSource &clientData) {
+        NS_LOG_FUNCTION(this << "inserting " << clientData.getPayloadId());
+
+        this->dirty = true;
         this->m_hostedResources.insert(clientData.getPayloadId());
-        UpdateGwConfiguration();
+        this->m_PendingResources.erase(clientData.getPayloadId());
+        if (this->event_Id.IsExpired()) {
+            this->event_Id = Simulator::Schedule(Seconds(2), &CachingControllerApplication::UpdateGwConfiguration,
+                                                 this);
+        }
+
+
     }
 }

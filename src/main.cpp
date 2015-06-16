@@ -106,20 +106,29 @@ main(int argc, char *argv[]) {
 
     double vcs = 1000.;
     double vcv = 200.;
+    int cpop = 1;
 
 
     char popDataRate[30] = "100kbps";
     char cpDataRate[30] = "100kbps";
     uint32_t payloadSize = 100000;
+    std::string popDelay = "10ms";
+    std::string cpDelay = "20ms";
 
     CommandLine cmd;
     cmd.AddValue("nGW", "Number of \"extra\" CSMA nodes/devices", nGW);
     cmd.AddValue("mat", "Mean arrival time for clients", mat);
-    cmd.AddValue("pop", "Data Rate for POP", popDataRate);
-    cmd.AddValue("cp", "Data Rate for cp", cpDataRate);
+
     cmd.AddValue("as", "payload average size", payloadSize);
     cmd.AddValue("vcs", "video corpus size", vcs);
     cmd.AddValue("vcv", "video corpus variance", vcv);
+    cmd.AddValue("cpop", "remove pop", cpop);
+
+    cmd.AddValue("popBitrate", "Data Rate for POP", popDataRate);
+    cmd.AddValue("cpBitrate", "Data Rate for cp", cpDataRate);
+    cmd.AddValue("popDelay", "delay of the pop", popDelay);
+    cmd.AddValue("cpDelay", "delay of the pop", cpDelay);
+
 
     cmd.Parse(argc, argv);
 
@@ -132,17 +141,15 @@ main(int argc, char *argv[]) {
 
 
 
-    Ptr<NormalRandomVariable> normal = CreateObject<NormalRandomVariable>();
-    normal->SetAttribute("Mean", DoubleValue(vcs / 2.));
-    normal->SetAttribute("Variance", DoubleValue(vcv));
+
 
 
 
 
     //LAN
     PointToPointHelper pointToPointLan;
-    pointToPointLan.SetDeviceAttribute("DataRate", StringValue("1Gbps"));
-    pointToPointLan.SetChannelAttribute("Delay", StringValue("0.2ms"));
+    pointToPointLan.SetDeviceAttribute("DataRate", StringValue("100Mbps"));
+    pointToPointLan.SetChannelAttribute("Delay", StringValue("0.3ms"));
 
     //CSMA
     CsmaHelper csmaHelper;
@@ -152,12 +159,12 @@ main(int argc, char *argv[]) {
     //POP
     PointToPointHelper pointToPointPOP;
     pointToPointPOP.SetDeviceAttribute("DataRate", DataRateValue(DataRate(popDataRate)));
-    pointToPointPOP.SetChannelAttribute("Delay", StringValue("1ns"));
+    pointToPointPOP.SetChannelAttribute("Delay", StringValue(popDelay.c_str()));
 
     //CP
     PointToPointHelper pointToPointCP;
     pointToPointCP.SetDeviceAttribute("DataRate", DataRateValue(DataRate(cpDataRate)));
-    pointToPointCP.SetChannelAttribute("Delay", StringValue("1ns"));
+    pointToPointCP.SetChannelAttribute("Delay", StringValue(cpDelay.c_str()));
 
 
     Ptr<ExponentialRandomVariable> ev = CreateObject<ExponentialRandomVariable>();
@@ -168,6 +175,10 @@ main(int argc, char *argv[]) {
     pv->SetAttribute("Mean", DoubleValue(payloadSize));
     pv->SetAttribute("Shape", DoubleValue(3));
     pv->SetAttribute("Bound", DoubleValue(10 * payloadSize));
+
+    Ptr<NormalRandomVariable> normal = CreateObject<NormalRandomVariable>();
+    normal->SetAttribute("Mean", DoubleValue(vcs ));
+    normal->SetAttribute("Variance", DoubleValue(vcv));
 
 
 
@@ -180,7 +191,7 @@ main(int argc, char *argv[]) {
     //LogComponentEnable("ClientApplication", LOG_LEVEL_ALL);
     //LogComponentEnable("CachingControllerApplication", LOG_LEVEL_ALL);
     //LogComponentEnable("NscTcpSocketImpl", LOG_LEVEL_ALL);
-    //LogComponentEnable("PacketSink", LOG_LEVEL_ALL);
+    LogComponentEnable("PacketSink", LOG_LEVEL_ALL);
     //LogComponentEnable("VideoDataSource", LOG_LEVEL_ALL);
     //LogComponentEnable("TcpTxBuffer", LOG_LEVEL_ALL);
     //LogComponentEnable("TcpNewReno", LOG_LEVEL_ALL);$
@@ -295,8 +306,6 @@ main(int argc, char *argv[]) {
         lanInterfaceContainers[i] = addressLanScheme.Assign(lanDevices);
         Ipv4Address gwAddress = lanInterfaceContainers[i].GetAddress(1);
         Ipv4Address clientAddress = lanInterfaceContainers[i].GetAddress(0);
-
-        //std::cout <<  "gw=" << gwAddress << " & " << csmaInterfaces.GetAddress(i+1) << " cl=" <<  clientAddress << std::endl;
 
 
         //client to pop and cp via gw
@@ -415,6 +424,7 @@ main(int argc, char *argv[]) {
         // CLIENT
         //an application to trigger the download from a datasource
 
+
         ClientDataFromDataSource *cdfs = new ClientDataFromDataSource(
                 boost::lexical_cast<std::string>(normal->GetInteger()), pv->GetInteger(), DataRate("320kbps"));
         cdfs->setIp(clientAddress);
@@ -458,13 +468,15 @@ main(int argc, char *argv[]) {
     }
 
     //POP Cache Controller
-    Ptr<labri::CachingControllerApplication> popApp = CreateObject<labri::CachingControllerApplication>();
-    popApp->Setup(
-            InetSocketAddress(popIpV4Addr, configurationPort));
+    if (cpop >= 1) {
+        Ptr<labri::CachingControllerApplication> popApp = CreateObject<labri::CachingControllerApplication>();
+        popApp->Setup(
+                InetSocketAddress(popIpV4Addr, configurationPort));
 
-    pop->AddApplication(popApp);
-    popApp->SetStartTime(Seconds(0));
-    popApp->SetStopTime(END);
+        pop->AddApplication(popApp);
+        popApp->SetStartTime(Seconds(0));
+        popApp->SetStopTime(END);
+    }
 
     //CP Data Source
     Ptr<labri::VideoDataSource> cpDSApp = CreateObject<labri::VideoDataSource>();
@@ -494,6 +506,7 @@ main(int argc, char *argv[]) {
     //pointToPointCP.EnablePcapAll("CP");
     //pointToPointLan.EnablePcapAll("Lan");
     //pointToPointPOP.EnablePcapAll("POP");
+    //pointToPointLan.EnablePcap("POP-signaling", routerPopDeviceContainer.Get(1), false);
 
 
     //pointToPointLan.EnablePcap("CP", routerCPDeviceContainer.Get(1), false);
@@ -538,8 +551,6 @@ main(int argc, char *argv[]) {
     transform(cpDr.begin(), cpDr.end(), back_inserter(keys), RetrieveKey());
     transform(popDr.begin(), popDr.end(), back_inserter(keys), RetrieveKey());
 
-    std::sort(keys.begin(), keys.end());
-    keys.erase(std::unique(keys.begin(), keys.end()), keys.end());
 
     std::ofstream ofs("server-loads.csv", std::ofstream::out);
 
@@ -558,25 +569,27 @@ main(int argc, char *argv[]) {
     }
 
     int count_dropped = 0;
-    for (std::vector<int>::const_iterator it = keys.begin(); it != keys.end(); ++it) {
+    std::pair<std::vector<int>::const_iterator, std::vector<int>::const_iterator> minmax = std::minmax_element(
+            keys.begin(), keys.end());
+    for (int i = *(minmax.first); i <= *(minmax.second); ++i) {
 
         double popValue = 0;
         double cpValue = 0;
 
 
-        if (cpDr.count(*it)) {
-            cpValue = cpDr[*it].totalSizeTransmitted;
+        if (cpDr.count(i)) {
+            cpValue = cpDr[i].totalSizeTransmitted;
         }
 
-        if (popDr.count(*it)) {
-            popValue = popDr[*it].totalSizeTransmitted;
+        if (popDr.count(i)) {
+            popValue = popDr[i].totalSizeTransmitted;
         }
 
-        if (cumulativeDroppedBySeconds.count(*it)) {
-            count_dropped += cumulativeDroppedBySeconds[*it];
+        if (cumulativeDroppedBySeconds.count(i)) {
+            count_dropped += cumulativeDroppedBySeconds[i];
 
         }
-        ofs << (*it) << "\t" << cpValue << "\t" << popValue << "\t" << count_dropped << std::endl;
+        ofs << i << "\t" << cpValue << "\t" << popValue << "\t" << count_dropped << std::endl;
 
 
     }

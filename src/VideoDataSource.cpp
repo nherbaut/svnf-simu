@@ -93,7 +93,7 @@ namespace labri {
         Ptr<Socket> clientSinkSocket = Socket::CreateSocket(GetNode(), TcpSocketFactory::GetTypeId());
         clientSinkSocket->Bind();
         clientSinkSocket->Connect(clientSinkAddress);
-        m_socketIpMapping[clientSinkSocket] = clientData->getIp();
+        m_socketIpMapping[clientSinkSocket] = clientData;
         Simulator::ScheduleNow(&VideoDataSource::pourData, this, clientSinkSocket);
 
 
@@ -140,14 +140,14 @@ namespace labri {
         //NS_LOG_FUNCTION(this << ::g_clientData[m_socketIpMapping[localSocket]]->getIp());
 
 
-        uint64_t current = ::g_clientData[m_socketIpMapping[localSocket]]->getCurrentTxBytes();
-        uint64_t total = ::g_clientData[m_socketIpMapping[localSocket]]->getTotalTxBytes();
+        uint64_t current = m_socketIpMapping[localSocket]->getCurrentTxBytes();
+        uint64_t total = m_socketIpMapping[localSocket]->getTotalTxBytes();
         double elapsedSecond = ::Simulator::Now().GetSeconds() -
-                               ::g_clientData[m_socketIpMapping[localSocket]]->getStartDate().GetSeconds();
+                               m_socketIpMapping[localSocket]->getStartDate().GetSeconds();
         double currentDataRate = current / (elapsedSecond);
 
 
-        DataRate targetDataRate = ::g_clientData[m_socketIpMapping[localSocket]]->getTargetDataRate();
+        DataRate targetDataRate = m_socketIpMapping[localSocket]->getTargetDataRate();
 
         if (currentDataRate > targetDataRate.GetBitRate() * 1.5) {
 
@@ -160,13 +160,14 @@ namespace labri {
             //NS_LOG_FUNCTION(this << elapsedSecond << " --> " << (  (1.0*current / targetDataRate.GetBitRate()) -elapsedSecond));
             //NS_LOG_FUNCTION(this << "we are too high (" << current << " bits sent in " << elapsedSecond << " s ==> currDr=" << currentDataRate << " vs " << targetDataRate << ") rescheduling at " << (Simulator::Now().GetSeconds()+next.GetSeconds()));
             Simulator::Schedule(next, &VideoDataSource::HandleStreamingRequestInternal, this,
-                                ::g_clientData[m_socketIpMapping[localSocket]]
+                                m_socketIpMapping[localSocket]
             );
 
-            m_socketIpMapping.erase(localSocket);
+
             localSocket->SetSendCallback(MakeNullCallback<void, Ptr<Socket>, uint32_t>());
             localSocket->ShutdownSend();
             localSocket->Close();
+            m_socketIpMapping.erase(localSocket);
             return;
 
 
@@ -174,40 +175,43 @@ namespace labri {
         else if ((currentDataRate < targetDataRate.GetBitRate() * 0.5) && elapsedSecond > 30) {
             //NS_LOG_FUNCTION(this << "low threshold");
             NS_LOG_FUNCTION(this << "we are too low" << currentDataRate << targetDataRate);
-            ::g_clientData[m_socketIpMapping[localSocket]]->setDropped(true);
-            ::g_clientData[m_socketIpMapping[localSocket]]->setDroppedDate(Simulator::Now());
-            m_socketIpMapping.erase(localSocket);
+            m_socketIpMapping[localSocket]->setDropped(true);
+            m_socketIpMapping[localSocket]->setDroppedDate(Simulator::Now());
+
             localSocket->SetSendCallback(MakeNullCallback<void, Ptr<Socket>, uint32_t>());
             localSocket->ShutdownSend();
             localSocket->Close();
+            m_socketIpMapping.erase(localSocket);
 
         }
 
 
         if (current >= total) {
             NS_LOG_FUNCTION(this << "done transmitting");
-            m_socketIpMapping.erase(localSocket);
+
             localSocket->SetSendCallback(MakeNullCallback<void, Ptr<Socket>, uint32_t>());
             localSocket->ShutdownSend();
             localSocket->Close();
+            m_socketIpMapping.erase(localSocket);
             return;
         }
         while (
-                ::g_clientData[m_socketIpMapping[localSocket]]->getCurrentTxBytes() < total &&
+                m_socketIpMapping[localSocket] &&
+                m_socketIpMapping[localSocket]->getCurrentTxBytes() < total &&
                 localSocket->GetTxAvailable() > 0
                 ) {
 
-            current = current = ::g_clientData[m_socketIpMapping[localSocket]]->getCurrentTxBytes();;
+            current = m_socketIpMapping[localSocket]->getCurrentTxBytes();;
             uint32_t left = total - current;
             uint32_t dataOffset = current % writeSize;
             uint32_t toWrite = writeSize - dataOffset;
             toWrite = std::min(toWrite, left);
             toWrite = std::min(toWrite, localSocket->GetTxAvailable());
             Ptr<Packet> packet = Create<Packet>(toWrite);
-            uint8_t* buff=new uint8_t[toWrite];
+            uint8_t *buff = new uint8_t[toWrite];
             //NS_LOG_FUNCTION(this << localSocket->GetErrno());
             int amountSent = localSocket->Send(packet);
-            delete buff;
+            delete [] buff;
 
             if (amountSent < 0) {
 
@@ -215,7 +219,7 @@ namespace labri {
                 // we will be called again when new tx space becomes available.
                 return;
             }
-            ::g_clientData[m_socketIpMapping[localSocket]]->setCurrentTxBytes(current + amountSent);
+            m_socketIpMapping[localSocket]->setCurrentTxBytes(current + amountSent);
             //NS_LOG_FUNCTION(this<< amountSent << "sent" <<  ::g_clientData[m_socketIpMapping[localSocket]]->getCurrentTxBytes());
         }
         //NS_LOG_FUNCTION(this << "done transmitting with " << localSocket->GetTxAvailable() << " remaining in buffer");

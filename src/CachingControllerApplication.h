@@ -41,8 +41,10 @@ namespace labri {
         std::list<Ptr<Socket> > m_acceptedSockets;
         std::list<Ptr<Socket> > m_gatewaysConn;
         std::set<std::string> m_hostedResources;
+        std::set<std::string> m_PendingResources;
 
         InetSocketAddress m_configuration;
+        bool dirty=false;
 
 
         void HandleNewResourceAsked(const ClientDataFromDataSource& clientData);
@@ -75,8 +77,7 @@ namespace labri {
         void UpdateGwConfiguration();
 
 
-
-
+        EventId event_Id;
     };
 
 }
