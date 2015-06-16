@@ -30,7 +30,7 @@ namespace labri {
 
     public:
 
-        ClientApplication() : m_gwSignalingAddr(), m_clientDataSink(""), m_clientData(0) {
+        ClientApplication() : m_gwSignalingAddr(), m_clientDataSink("") {
 
         }
 
@@ -39,12 +39,23 @@ namespace labri {
         }
 
 
-        void Setup(Address SignalingAddr,
-                   InetSocketAddress clientDataSink, ClientDataFromDataSource* clientData) {
+        void Setup(Address SignalingAddr, InetSocketAddress clientDataSink, std::string clientDataId) {
             m_gwSignalingAddr = SignalingAddr;
             m_clientDataSink = clientDataSink;
-            m_clientData = clientData;
-            m_clientData->setIp(clientDataSink.GetIpv4());
+            ClientDataFromDataSource *cdfs=ClientDataFromDataSource::fromId(clientDataId);
+            cdfs->setIp(clientDataSink.GetIpv4());
+            cdfs->setPort(clientDataSink.GetPort());
+            m_clientDatas.push_back(clientDataId);
+
+
+        }
+
+        void Setup(Address SignalingAddr, InetSocketAddress clientDataSink,
+                   std::vector<std::string> clientDataIds) {
+            m_gwSignalingAddr = SignalingAddr;
+            m_clientDataSink = clientDataSink;
+            m_clientDatas.insert(clientDataIds.begin(), clientDataIds.end(), clientDataIds.end());
+
 
         }
 
@@ -53,31 +64,40 @@ namespace labri {
 
         Address m_gwSignalingAddr;
         InetSocketAddress m_clientDataSink;
-        ClientDataFromDataSource* m_clientData;
+
+        std::vector<std::string> m_clientDatas;
 
         int m_retry = 0;
 
         virtual void StartApplication(void) {
             NS_LOG_FUNCTION(this);
 
-            askForDataSourceToGW(m_clientData->toString());
+            for (std::vector<std::string>::const_iterator itr = m_clientDatas.begin();
+                 itr != m_clientDatas.end(); ++itr) {
+
+
+                Simulator::Schedule(ClientDataFromDataSource::fromId(*itr)->getStartDate(), &ClientApplication::askForDataSourceToGW, this,
+                                    *itr);
+
+            }
 
 
         }
 
 
-        virtual void askForDataSourceToGW(const std::string &resource) {
+        virtual void askForDataSourceToGW(const std::string& id) {
             NS_LOG_FUNCTION(this);
+            ClientDataFromDataSource *clientData = ClientDataFromDataSource::fromId(id);
             Ptr<Socket> socket = Socket::CreateSocket(GetNode(), TcpSocketFactory::GetTypeId());
 
-            std::stringstream ss;
-            ss << resource << "\t" << m_clientDataSink.GetIpv4() << ":" << m_clientDataSink.GetPort();
+            clientData->setSinkIpAddress(m_clientDataSink.GetIpv4());
+            clientData->setSinkPort(m_clientDataSink.GetPort());
 
             socket->Bind();
             socket->Connect(this->m_gwSignalingAddr);
 
-            Ptr<Packet> packet = Create<Packet>(reinterpret_cast<const uint8_t *>(ss.str().c_str()), ss.str().length());
-            socket->Send(packet);
+
+            socket->Send(reinterpret_cast<const uint8_t *>(id.c_str()), id.length(),0);
             socket->Close();
 
         }

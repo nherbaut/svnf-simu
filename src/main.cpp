@@ -30,6 +30,10 @@
 #include <boost/regex.hpp>
 #include <boost/lexical_cast.hpp>
 #include "ns3/stats-module.h"
+#include <boost/uuid/random_generator.hpp>
+#include <boost/uuid/uuid_serialize.hpp>
+#include <boost/uuid/uuid_io.hpp>
+#include <boost/uuid/uuid.hpp>
 #include "commons.h"
 
 //
@@ -52,9 +56,11 @@ using namespace ns3;
 
 std::map<std::string, ClientDataFromDataSource *> g_clientData;
 
-//std::map<int, ClientStatObservedFromMain> clientStats;
+#ifdef LOG_PACKET
+std::map<int, ClientStatObservedFromMain> clientStats;
+#endif
 extern std::map<int, int> newResourcesStartTime;
-
+boost::uuids::basic_random_generator<boost::mt19937> gen;
 NS_LOG_COMPONENT_DEFINE ("SVNF");
 
 
@@ -87,15 +93,14 @@ void PacketTraceCallBackPOP(std::string context, const Ptr<const Packet> packet)
 }
 
 
-/*
+#ifdef LOG_PACKET
 void PacketAddressTrace(std::string context, const Ptr<const Packet> packet, const Address &address) {
 
     int s = boost::lexical_cast<int>(context.substr(10, context.substr(10, context.length() - 10).find("/")));
     clientStats[s].stopDate = Simulator::Now();
     clientStats[s].totalSize += packet->GetSize();
-
-
-}*/
+}
+#endif
 
 int
 main(int argc, char *argv[]) {
@@ -177,7 +182,7 @@ main(int argc, char *argv[]) {
     pv->SetAttribute("Bound", DoubleValue(10 * payloadSize));
 
     Ptr<NormalRandomVariable> normal = CreateObject<NormalRandomVariable>();
-    normal->SetAttribute("Mean", DoubleValue(vcs ));
+    normal->SetAttribute("Mean", DoubleValue(vcs));
     normal->SetAttribute("Variance", DoubleValue(vcv));
 
 
@@ -191,7 +196,7 @@ main(int argc, char *argv[]) {
     //LogComponentEnable("ClientApplication", LOG_LEVEL_ALL);
     //LogComponentEnable("CachingControllerApplication", LOG_LEVEL_ALL);
     //LogComponentEnable("NscTcpSocketImpl", LOG_LEVEL_ALL);
-    LogComponentEnable("PacketSink", LOG_LEVEL_ALL);
+    //LogComponentEnable("PacketSink", LOG_LEVEL_ALL);
     //LogComponentEnable("VideoDataSource", LOG_LEVEL_ALL);
     //LogComponentEnable("TcpTxBuffer", LOG_LEVEL_ALL);
     //LogComponentEnable("TcpNewReno", LOG_LEVEL_ALL);$
@@ -430,39 +435,37 @@ main(int argc, char *argv[]) {
         cdfs->setIp(clientAddress);
         cdfs->setStartDate(Seconds(currentStartTime));
         cdfs->setEndDate(END);
-        g_clientData[cdfs->getIp()] = cdfs;
+        boost::uuids::uuid u = gen();
+        cdfs->setId(boost::lexical_cast<std::string>(u));
+        g_clientData[cdfs->getId()] = cdfs;
 
 
         Ptr<labri::ClientApplication> clientApp = CreateObject<labri::ClientApplication>();
-        clientApp->Setup(InetSocketAddress(gwAddress, signalingPort),
+        clientApp->Setup(InetSocketAddress(gwAddress, signalingPort), InetSocketAddress(clientAddress, dataSourcePort),
+                         cdfs->getId());
 
-                         InetSocketAddress(clientAddress, dataSourcePort), cdfs
-
-        );
 
         clientNodes.Get(i)->AddApplication(clientApp);
 
-
-        clientApp->SetStartTime(Seconds(currentStartTime));
-        clientApp->SetStopTime(END);
 
         PacketSinkHelper helper("ns3::TcpSocketFactory", InetSocketAddress(clientAddress, dataSourcePort));
         helper.Install(clientNodes.Get(i));
 
 
-        Ptr<PacketSink> clientSinkApp = DynamicCast<PacketSink>(clientNodes.Get(i)->GetApplication(1));
+
 
 
         //check if client receive the right amount of bytes
-        /*
+        #ifdef LOG_PACKET
         std::ostringstream oss;
-        oss << "/NodeList/" << clientNodes.Get(i)->GetId() << "/ApplicationList/" << 1 << "/$ns3::PacketSink/Rx";
+        oss << "/NodeList/" << clientNodes.Get(i)->GetId() << "/ApplicationList/*/$ns3::PacketSink/Rx";
         Config::Connect(oss.str(), MakeCallback(&PacketAddressTrace));
         ClientStatObservedFromMain stats;
         stats.startDate = Seconds(currentStartTime);
         stats.stopDate = Seconds(currentStartTime);
         clientStats[clientNodes.Get(i)->GetId()] = stats;
-         */
+        #endif
+
 
 
     }
@@ -529,7 +532,7 @@ main(int argc, char *argv[]) {
     Simulator::Run();
     //std::cout << "sim ran" << std::endl;
 
-    /*
+#ifdef LOG_PACKET
     for (int i = 0; i < nGW; i++) {
         Ptr<PacketSink> clientApp = DynamicCast<PacketSink>(clientNodes.Get(i)->GetApplication(1));
         std::stringstream ss;
@@ -541,7 +544,8 @@ main(int argc, char *argv[]) {
         duration.As(Time::S) << " " << clientApp->GetTotalRx() / duration.GetSeconds() / 1000 << " kBps";
         NS_LOG_UNCOND(ss.str());
 
-    }*/
+    }
+    #endif
 
     //////////////////////////////::
     // Plot server Loads

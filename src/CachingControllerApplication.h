@@ -47,8 +47,8 @@ namespace labri {
         bool dirty=false;
 
 
-        void HandleNewResourceAsked(const ClientDataFromDataSource& clientData);
-        void TranscodingAndDeployingDone(const ClientDataFromDataSource& clientData);
+        void HandleNewResourceAsked(const std::string& );
+        void TranscodingAndDeployingDone(const std::string& );
 
         void handleExistingResourceAsked(const std::string &str);
 

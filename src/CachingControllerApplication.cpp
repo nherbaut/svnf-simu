@@ -119,8 +119,8 @@ namespace labri {
         NS_LOG_FUNCTION(this);
         std::ostringstream buf;
         HandleClientConfigurationInput->Recv()->CopyData(&buf, INT_MAX);
-        const ClientDataFromDataSource clientData(buf.str());
-        HandleNewResourceAsked(clientData);
+
+        HandleNewResourceAsked(buf.str());
 
 
     }
@@ -145,25 +145,26 @@ namespace labri {
     }
 
     void CachingControllerApplication::HandleNewResourceAsked(
-            const ClientDataFromDataSource &clientData) {
+            const std::string& clientId) {
         NS_LOG_FUNCTION(this);
 
-        if (this->m_hostedResources.count(clientData.getPayloadId()) == 0 &&
-            this->m_PendingResources.count(clientData.getPayloadId()) == 0) {
-            m_PendingResources.insert(clientData.getPayloadId());
+        ClientDataFromDataSource * cdfs = ClientDataFromDataSource::fromId(clientId);
+        if (this->m_hostedResources.count(cdfs->getPayloadId()) == 0 &&
+            this->m_PendingResources.count(cdfs->getPayloadId()) == 0) {
+            m_PendingResources.insert(cdfs->getPayloadId());
             Simulator::Schedule(Seconds(10), &CachingControllerApplication::TranscodingAndDeployingDone, this,
-                                clientData);
+                                clientId);
         }
 
 
     }
 
-    void CachingControllerApplication::TranscodingAndDeployingDone(const ClientDataFromDataSource &clientData) {
-        NS_LOG_FUNCTION(this << "inserting " << clientData.getPayloadId());
+    void CachingControllerApplication::TranscodingAndDeployingDone(const std::string& clientId) {
+        ClientDataFromDataSource * cdfs = ClientDataFromDataSource::fromId(clientId);
 
         this->dirty = true;
-        this->m_hostedResources.insert(clientData.getPayloadId());
-        this->m_PendingResources.erase(clientData.getPayloadId());
+        this->m_hostedResources.insert(cdfs->getPayloadId());
+        this->m_PendingResources.erase(cdfs->getPayloadId());
         if (this->event_Id.IsExpired()) {
             this->event_Id = Simulator::Schedule(Seconds(2), &CachingControllerApplication::UpdateGwConfiguration,
                                                  this);

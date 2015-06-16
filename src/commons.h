@@ -37,6 +37,11 @@ public:
 };
 
 
+class ClientDataFromDataSource;
+extern std::map<std::string, ClientDataFromDataSource *> g_clientData;
+extern std::map<int, int> newResourcesStartTime;
+
+
 class ClientDataFromDataSource {
 public:
 
@@ -59,8 +64,14 @@ public:
 
 
     ClientDataFromDataSource(std::string data) {
+        uint32_t sinkIpAddress;
         std::stringstream s(data);
-        s >> m_payloadId >> m_totalSize >> m_targetBitrate;
+        double startDate;
+
+        s >> m_payloadId >> m_totalSize >> m_targetBitrate >> startDate >> sinkIpAddress >> m_sinkPort;
+
+        m_startDate = Time::FromDouble(startDate, Time::S);
+        m_sinkIpAddress = Ipv4Address(sinkIpAddress);
 
     }
 
@@ -73,7 +84,8 @@ public:
 
     std::string toString() {
         std::stringstream s;
-        s << m_payloadId << " " << m_totalSize << " " << m_targetBitrate << " " << m_startDate.GetSeconds();
+        s << m_payloadId << " " << m_totalSize << " " << m_targetBitrate << " " << m_startDate.GetSeconds() <<
+        m_sinkIpAddress.Get() << m_sinkPort;
         return s.str();
     }
 
@@ -125,6 +137,10 @@ public:
         ClientDataFromDataSource::m_dropped = dropped;
     }
 
+    static ClientDataFromDataSource* fromId(std::string id){
+        return ::g_clientData[id];
+    }
+
 
 private:
     std::string m_payloadId;
@@ -134,6 +150,40 @@ private:
     Time m_endDate;
     uint64_t m_currentTxBytes;
     std::string m_ip;
+public:
+    std::string getId() const {
+        return m_id;
+    }
+
+    void setId(std::string id) {
+        ClientDataFromDataSource::m_id = id;
+    }
+
+
+
+private:
+    std::string m_id;
+
+    ns3::Ipv4Address m_sinkIpAddress;
+public:
+    uint16_t getSinkPort() const {
+        return m_sinkPort;
+    }
+
+    void setSinkPort(uint16_t sinkPort) {
+        ClientDataFromDataSource::m_sinkPort = sinkPort;
+    }
+
+    Ipv4Address const &getSinkIpAddress() const {
+        return m_sinkIpAddress;
+    }
+
+    void setSinkIpAddress(Ipv4Address const &sinkIpAddress) {
+        ClientDataFromDataSource::m_sinkIpAddress = sinkIpAddress;
+    }
+
+private:
+    uint16_t m_sinkPort;
 public:
     uint16_t getPort() const {
         return m_port;
@@ -163,7 +213,6 @@ private:
 };
 
 
-extern std::map<std::string, ClientDataFromDataSource *> g_clientData;
-extern std::map<int, int> newResourcesStartTime;
+
 
 #endif //SVNF_SIMU_COMMONS_H_QSGQSDFQSDFQSDF

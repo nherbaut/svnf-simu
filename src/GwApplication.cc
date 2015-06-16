@@ -71,7 +71,7 @@ namespace ns3 {
         socket->Close();
 
 
-        ClientDataFromDataSource cdfs(buf.str());
+        ClientDataFromDataSource cdfs=*(ClientDataFromDataSource::fromId(buf.str()));
 
         NS_LOG_FUNCTION (this << cdfs.toString());
         const std::string resource = cdfs.getPayloadId();
@@ -79,11 +79,11 @@ namespace ns3 {
         bool isManaged=false;
 
         if (std::find(m_handlerResources.begin(), m_handlerResources.end(), resource) != m_handlerResources.end()) {
-            triggerDownloadFromPOP(buf.str());
+            triggerDownloadFromPOP(cdfs.getId());
         }
         else {
-            triggerDownloadFromCP(buf.str());
-            notifyPOP(resource);
+            triggerDownloadFromCP(cdfs.getId());
+            notifyPOP( cdfs.getId());
 
         }
 

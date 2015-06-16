@@ -86,14 +86,14 @@ namespace labri {
     }
 
 
-    void VideoDataSource::HandleStreamingRequestInternal(ClientDataFromDataSource *clientData) {
+    void VideoDataSource::HandleStreamingRequestInternal(const std::string& clientId) {
 
-
+        ClientDataFromDataSource *clientData = ClientDataFromDataSource::fromId(clientId);
         InetSocketAddress clientSinkAddress(clientData->getIp().c_str(), clientData->getPort());
         Ptr<Socket> clientSinkSocket = Socket::CreateSocket(GetNode(), TcpSocketFactory::GetTypeId());
         clientSinkSocket->Bind();
         clientSinkSocket->Connect(clientSinkAddress);
-        m_socketIpMapping[clientSinkSocket] = clientData;
+        m_socketIpMapping[clientSinkSocket] = clientId;
         Simulator::ScheduleNow(&VideoDataSource::pourData, this, clientSinkSocket);
 
 
@@ -106,19 +106,12 @@ namespace labri {
         NS_LOG_FUNCTION(this << "we handle " << ++client << " clients");
         std::ostringstream ss;
         socket->Recv()->CopyData(&ss, INT_MAX);
-        const std::string clientQuery = ss.str();
-
-        const std::string clientInetAdd = clientQuery.substr(clientQuery.find('\t') + 1, clientQuery.length());
+        ClientDataFromDataSource *cdfs = ClientDataFromDataSource::fromId(ss.str());
 
 
-        const std::string clientIP = clientInetAdd.substr(0, clientInetAdd.find(':'));
-        const uint16_t port = boost::lexical_cast<uint16_t>(
-                clientInetAdd.substr(clientInetAdd.find(':') + 1, clientInetAdd.length()));
+        cdfs->setCurrentTxBytes(0);
 
-        ::g_clientData[clientIP]->setPort(port);
-        ::g_clientData[clientIP]->setCurrentTxBytes(0);
-
-        this->HandleStreamingRequestInternal(::g_clientData[clientIP]);
+        this->HandleStreamingRequestInternal(cdfs->getId());
 
         socket->Close();
 
@@ -139,28 +132,28 @@ namespace labri {
 
         //NS_LOG_FUNCTION(this << ::g_clientData[m_socketIpMapping[localSocket]]->getIp());
 
-
-        uint64_t current = m_socketIpMapping[localSocket]->getCurrentTxBytes();
-        uint64_t total = m_socketIpMapping[localSocket]->getTotalTxBytes();
+        ClientDataFromDataSource *cdfs = ClientDataFromDataSource::fromId(m_socketIpMapping[localSocket]);
+        uint64_t current = cdfs->getCurrentTxBytes();
+        uint64_t total = cdfs->getTotalTxBytes();
         double elapsedSecond = ::Simulator::Now().GetSeconds() -
-                               m_socketIpMapping[localSocket]->getStartDate().GetSeconds();
+                               cdfs->getStartDate().GetSeconds();
         double currentDataRate = current / (elapsedSecond);
 
 
-        DataRate targetDataRate = m_socketIpMapping[localSocket]->getTargetDataRate();
+        DataRate targetDataRate = cdfs->getTargetDataRate();
 
         if (currentDataRate > targetDataRate.GetBitRate() * 1.5) {
 
-            //NS_LOG_FUNCTION(this << "high threshold");
+            NS_LOG_FUNCTION(this << "high threshold");
             //unplug the callback for buffer space available
             localSocket->SetSendCallback(MakeNullCallback<void, Ptr<Socket>, uint32_t>());
 
 
             Time next(Seconds(((1.0 * current / targetDataRate.GetBitRate()) - elapsedSecond)));
-            //NS_LOG_FUNCTION(this << elapsedSecond << " --> " << (  (1.0*current / targetDataRate.GetBitRate()) -elapsedSecond));
-            //NS_LOG_FUNCTION(this << "we are too high (" << current << " bits sent in " << elapsedSecond << " s ==> currDr=" << currentDataRate << " vs " << targetDataRate << ") rescheduling at " << (Simulator::Now().GetSeconds()+next.GetSeconds()));
+            NS_LOG_FUNCTION(this << elapsedSecond << " --> " << (  (1.0*current / targetDataRate.GetBitRate()) -elapsedSecond));
+            NS_LOG_FUNCTION(this << "we are too high (" << current << " bits sent in " << elapsedSecond << " s ==> currDr=" << currentDataRate << " vs " << targetDataRate << ") rescheduling at " << (Simulator::Now().GetSeconds()+next.GetSeconds()));
             Simulator::Schedule(next, &VideoDataSource::HandleStreamingRequestInternal, this,
-                                m_socketIpMapping[localSocket]
+                                cdfs->getId()
             );
 
 
@@ -175,8 +168,9 @@ namespace labri {
         else if ((currentDataRate < targetDataRate.GetBitRate() * 0.5) && elapsedSecond > 30) {
             //NS_LOG_FUNCTION(this << "low threshold");
             NS_LOG_FUNCTION(this << "we are too low" << currentDataRate << targetDataRate);
-            m_socketIpMapping[localSocket]->setDropped(true);
-            m_socketIpMapping[localSocket]->setDroppedDate(Simulator::Now());
+            ClientDataFromDataSource *cdfs = ClientDataFromDataSource::fromId(m_socketIpMapping[localSocket]);
+            cdfs->setDropped(true);
+            cdfs->setDroppedDate(Simulator::Now());
 
             localSocket->SetSendCallback(MakeNullCallback<void, Ptr<Socket>, uint32_t>());
             localSocket->ShutdownSend();
@@ -196,12 +190,12 @@ namespace labri {
             return;
         }
         while (
-                m_socketIpMapping[localSocket] &&
-                m_socketIpMapping[localSocket]->getCurrentTxBytes() < total &&
+
+                cdfs->getCurrentTxBytes() < total &&
                 localSocket->GetTxAvailable() > 0
                 ) {
 
-            current = m_socketIpMapping[localSocket]->getCurrentTxBytes();;
+            current = cdfs->getCurrentTxBytes();;
             uint32_t left = total - current;
             uint32_t dataOffset = current % writeSize;
             uint32_t toWrite = writeSize - dataOffset;
@@ -209,20 +203,20 @@ namespace labri {
             toWrite = std::min(toWrite, localSocket->GetTxAvailable());
             Ptr<Packet> packet = Create<Packet>(toWrite);
             uint8_t *buff = new uint8_t[toWrite];
-            //NS_LOG_FUNCTION(this << localSocket->GetErrno());
+            NS_LOG_FUNCTION(this << localSocket->GetErrno());
             int amountSent = localSocket->Send(packet);
-            delete [] buff;
+            delete[] buff;
 
             if (amountSent < 0) {
 
-                //NS_LOG_FUNCTION(this << "done transmitting with " << amountSent << " byte sent and " << toWrite <<                                " requested. Errno is" << localSocket->GetErrno());
+                NS_LOG_FUNCTION(this << "done transmitting with " << amountSent << " byte sent and " << toWrite <<                                " requested. Errno is" << localSocket->GetErrno());
                 // we will be called again when new tx space becomes available.
                 return;
             }
-            m_socketIpMapping[localSocket]->setCurrentTxBytes(current + amountSent);
-            //NS_LOG_FUNCTION(this<< amountSent << "sent" <<  ::g_clientData[m_socketIpMapping[localSocket]]->getCurrentTxBytes());
+            cdfs->setCurrentTxBytes(current + amountSent);
+            NS_LOG_FUNCTION(this<< amountSent << "sent" <<  ::g_clientData[m_socketIpMapping[localSocket]]->getCurrentTxBytes());
         }
-        //NS_LOG_FUNCTION(this << "done transmitting with " << localSocket->GetTxAvailable() << " remaining in buffer");
+        NS_LOG_FUNCTION(this << "done transmitting with " << localSocket->GetTxAvailable() << " remaining in buffer");
 
         localSocket->Close();
         //NS_LOG_FUNCTION(this << Simulator::Now().As(Time::Unit::S) <<                      m_socketData[localSocket].currentTxBytes << m_socketData[localSocket].totalTxBytes);
