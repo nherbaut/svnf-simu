@@ -52,7 +52,7 @@ using namespace ns3;
 
 std::map<std::string, ClientDataFromDataSource *> g_clientData;
 
-std::map<int, ClientStatObservedFromMain> clientStats;
+//std::map<int, ClientStatObservedFromMain> clientStats;
 extern std::map<int, int> newResourcesStartTime;
 
 NS_LOG_COMPONENT_DEFINE ("SVNF");
@@ -87,6 +87,7 @@ void PacketTraceCallBackPOP(std::string context, const Ptr<const Packet> packet)
 }
 
 
+/*
 void PacketAddressTrace(std::string context, const Ptr<const Packet> packet, const Address &address) {
 
     int s = boost::lexical_cast<int>(context.substr(10, context.substr(10, context.length() - 10).find("/")));
@@ -94,7 +95,7 @@ void PacketAddressTrace(std::string context, const Ptr<const Packet> packet, con
     clientStats[s].totalSize += packet->GetSize();
 
 
-}
+}*/
 
 int
 main(int argc, char *argv[]) {
@@ -180,7 +181,7 @@ main(int argc, char *argv[]) {
     //LogComponentEnable("CachingControllerApplication", LOG_LEVEL_ALL);
     //LogComponentEnable("NscTcpSocketImpl", LOG_LEVEL_ALL);
     //LogComponentEnable("PacketSink", LOG_LEVEL_ALL);
-    //)LogComponentEnable("VideoDataSource", LOG_LEVEL_ALL);
+    //LogComponentEnable("VideoDataSource", LOG_LEVEL_ALL);
     //LogComponentEnable("TcpTxBuffer", LOG_LEVEL_ALL);
     //LogComponentEnable("TcpNewReno", LOG_LEVEL_ALL);$
     //LogComponentEnable("Ipv4StaticRouting", LOG_LEVEL_ALL);
@@ -363,12 +364,7 @@ main(int argc, char *argv[]) {
 
         }
 
-/*
-        std::stringstream ssx;
-        Ptr<OutputStreamWrapper> wrapper = Create<OutputStreamWrapper>(&ssx);
-        staticRouterouter->PrintRoutingTable(wrapper);
-        std::cout << ssx.str() << std::endl;
-        /**/
+
     }
 
     ///////////////////////////////////////////:
@@ -380,9 +376,9 @@ main(int argc, char *argv[]) {
     ss << "\tCP is " << cpIpV4Addr << "\n";
     //NS_LOG_UNCOND(ss.str().c_str());
 
-    uint16_t signalingPort = 18080;
-    uint16_t configurationPort = 18081;
-    uint16_t dataSourcePort = 18082;
+    const uint16_t signalingPort = 18080;
+    const uint16_t configurationPort = 18081;
+    const uint16_t dataSourcePort = 18082;
 
 
     double currentStartTime = 0;
@@ -445,7 +441,10 @@ main(int argc, char *argv[]) {
 
 
         Ptr<PacketSink> clientSinkApp = DynamicCast<PacketSink>(clientNodes.Get(i)->GetApplication(1));
-        //clientNodes.Get(i)->GetId()s
+
+
+        //check if client receive the right amount of bytes
+        /*
         std::ostringstream oss;
         oss << "/NodeList/" << clientNodes.Get(i)->GetId() << "/ApplicationList/" << 1 << "/$ns3::PacketSink/Rx";
         Config::Connect(oss.str(), MakeCallback(&PacketAddressTrace));
@@ -453,6 +452,7 @@ main(int argc, char *argv[]) {
         stats.startDate = Seconds(currentStartTime);
         stats.stopDate = Seconds(currentStartTime);
         clientStats[clientNodes.Get(i)->GetId()] = stats;
+         */
 
 
     }
@@ -516,6 +516,7 @@ main(int argc, char *argv[]) {
     Simulator::Run();
     //std::cout << "sim ran" << std::endl;
 
+    /*
     for (int i = 0; i < nGW; i++) {
         Ptr<PacketSink> clientApp = DynamicCast<PacketSink>(clientNodes.Get(i)->GetApplication(1));
         std::stringstream ss;
@@ -527,7 +528,7 @@ main(int argc, char *argv[]) {
         duration.As(Time::S) << " " << clientApp->GetTotalRx() / duration.GetSeconds() / 1000 << " kBps";
         NS_LOG_UNCOND(ss.str());
 
-    }
+    }*/
 
     //////////////////////////////::
     // Plot server Loads
@@ -556,12 +557,11 @@ main(int argc, char *argv[]) {
         }
     }
 
-    int count_dropped=0;
+    int count_dropped = 0;
     for (std::vector<int>::const_iterator it = keys.begin(); it != keys.end(); ++it) {
 
         double popValue = 0;
         double cpValue = 0;
-
 
 
         if (cpDr.count(*it)) {
@@ -572,8 +572,8 @@ main(int argc, char *argv[]) {
             popValue = popDr[*it].totalSizeTransmitted;
         }
 
-        if(cumulativeDroppedBySeconds.count(*it)){
-            count_dropped+=cumulativeDroppedBySeconds[*it];
+        if (cumulativeDroppedBySeconds.count(*it)) {
+            count_dropped += cumulativeDroppedBySeconds[*it];
 
         }
         ofs << (*it) << "\t" << cpValue << "\t" << popValue << "\t" << count_dropped << std::endl;

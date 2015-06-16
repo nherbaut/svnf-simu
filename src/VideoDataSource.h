@@ -75,6 +75,8 @@ namespace  labri {
         void pourData(Ptr<Socket> clientSinkSocket);
 
         void Noop(Ptr<Socket> localSocket, uint32_t txSpace);
+
+        static int client;
     };
 }
 
