@@ -85,31 +85,38 @@ namespace labri {
         ptr->SetRecvCallback(MakeCallback(&VideoDataSource::HandleStreamingRequest, this));
     }
 
+
+    void VideoDataSource::HandleStreamingRequestInternal(ClientDataFromDataSource *clientData) {
+
+
+        InetSocketAddress clientSinkAddress(clientData->getIp().c_str(), clientData->getPort());
+        Ptr<Socket> clientSinkSocket = Socket::CreateSocket(GetNode(), TcpSocketFactory::GetTypeId());
+        clientSinkSocket->Bind();
+        clientSinkSocket->Connect(clientSinkAddress);
+        m_socketIpMapping[clientSinkSocket] = clientData->getIp();
+        Simulator::ScheduleNow(&VideoDataSource::pourData, this, clientSinkSocket);
+
+
+    }
+
+
     void VideoDataSource::HandleStreamingRequest(Ptr<Socket> socket) {
-        NS_LOG_FUNCTION(this);
+        NS_LOG_FUNCTION(this << "we handle " << m_socketIpMapping.size() << " clients");
         std::ostringstream ss;
         socket->Recv()->CopyData(&ss, INT_MAX);
         const std::string clientQuery = ss.str();
+
         const std::string clientInetAdd = clientQuery.substr(clientQuery.find('\t') + 1, clientQuery.length());
 
 
         const std::string clientIP = clientInetAdd.substr(0, clientInetAdd.find(':'));
-        const std::string clientPort = clientInetAdd.substr(clientInetAdd.find(':') + 1, clientInetAdd.length());
+        const uint16_t port = boost::lexical_cast<uint16_t>(
+                clientInetAdd.substr(clientInetAdd.find(':') + 1, clientInetAdd.length()));
 
-
-        InetSocketAddress clientSinkAddress(clientIP.c_str(), boost::lexical_cast<uint16_t>(clientPort));
-        Ptr<Socket> clientSinkSocket = Socket::CreateSocket(GetNode(), TcpSocketFactory::GetTypeId());
-        clientSinkSocket->Bind();
-        clientSinkSocket->Connect(clientSinkAddress);
-
-
+        ::g_clientData[clientIP]->setPort(port);
         ::g_clientData[clientIP]->setCurrentTxBytes(0);
 
-        m_socketIpMapping[clientSinkSocket] = clientIP;
-
-
-        //DataRate video = DataRate("320kbps");
-        Simulator::ScheduleNow(&VideoDataSource::pourData, this, clientSinkSocket);
+        this->HandleStreamingRequestInternal(::g_clientData[clientIP]);
 
         socket->Close();
 
@@ -117,17 +124,23 @@ namespace labri {
     }
 
     void VideoDataSource::pourData(Ptr<Socket> clientSinkSocket) {
-
+        NS_LOG_FUNCTION(this << ::g_clientData[m_socketIpMapping[clientSinkSocket]]->getIp() << "remaining" <<
+                        (::g_clientData[m_socketIpMapping[clientSinkSocket]]->getTotalTxBytes() -
+                         ::g_clientData[m_socketIpMapping[clientSinkSocket]]->getCurrentTxBytes()));
         clientSinkSocket->SetSendCallback(MakeCallback(&VideoDataSource::WriteUntilBufferFull, this));
 
         WriteUntilBufferFull(clientSinkSocket, clientSinkSocket->GetTxAvailable());
     }
 
 
-    char indice = 'a';
+    void VideoDataSource::Noop(Ptr<Socket> localSocket, uint32_t txSpace) {
+        NS_LOG_FUNCTION(this << ::g_clientData[m_socketIpMapping[localSocket]]->getIp() << localSocket->GetErrno());
+
+    }
 
     void VideoDataSource::WriteUntilBufferFull(Ptr<Socket> localSocket, uint32_t txSpace) {
-        indice++;
+
+        NS_LOG_FUNCTION(this << ::g_clientData[m_socketIpMapping[localSocket]]->getIp());
 
 
         uint64_t current = ::g_clientData[m_socketIpMapping[localSocket]]->getCurrentTxBytes();
@@ -138,22 +151,32 @@ namespace labri {
 
 
         DataRate targetDataRate = ::g_clientData[m_socketIpMapping[localSocket]]->getTargetDataRate();
-        if (currentDataRate > targetDataRate.GetBitRate() * 1.25) {
 
+        if (currentDataRate > targetDataRate.GetBitRate() * 1.5) {
 
+            NS_LOG_FUNCTION(this << "high threshold");
             //unplug the callback for buffer space available
+            //localSocket->SetSendCallback(MakeNullCallback<void, Ptr<Socket>, uint32_t>());
+            localSocket->SetSendCallback(MakeCallback(&VideoDataSource::Noop, this));
+
+            Time next(Seconds(((1.0 * current / targetDataRate.GetBitRate()) - elapsedSecond)));
+            //NS_LOG_FUNCTION(this << elapsedSecond << " --> " << (  (1.0*current / targetDataRate.GetBitRate()) -elapsedSecond));
+            //NS_LOG_FUNCTION(this << "we are too high (" << current << " bits sent in " << elapsedSecond << " s ==> currDr=" << currentDataRate << " vs " << targetDataRate << ") rescheduling at " << (Simulator::Now().GetSeconds()+next.GetSeconds()));
+            Simulator::Schedule(next, &VideoDataSource::HandleStreamingRequestInternal, this,
+                                ::g_clientData[m_socketIpMapping[localSocket]]
+            );
             localSocket->SetSendCallback(MakeNullCallback<void, Ptr<Socket>, uint32_t>());
-            Time next(Seconds((  (1.0*current / targetDataRate.GetBitRate()) -elapsedSecond)));
-            NS_LOG_FUNCTION(this << elapsedSecond << " --> " << (  (1.0*current / targetDataRate.GetBitRate()) -elapsedSecond));
-            NS_LOG_FUNCTION(this << "we are too high (" << currentDataRate << " vs " << targetDataRate << ") rescheduling at " << next.GetSeconds());
-            Simulator::Schedule(next, &VideoDataSource::pourData, this, localSocket);
+            localSocket->ShutdownSend();
+            localSocket->Close();
             return;
 
 
         }
         else if ((currentDataRate < targetDataRate.GetBitRate() * 0.5) && elapsedSecond > 30) {
-            NS_LOG_FUNCTION(this << "we are too low" << currentDataRate << targetDataRate);
+            NS_LOG_FUNCTION(this << "low threshold");
+            //NS_LOG_FUNCTION(this << "we are too low" << currentDataRate << targetDataRate);
             ::g_clientData[m_socketIpMapping[localSocket]]->setDropped(true);
+            ::g_clientData[m_socketIpMapping[localSocket]]->setDroppedDate(Simulator::Now());
             localSocket->SetSendCallback(MakeNullCallback<void, Ptr<Socket>, uint32_t>());
             localSocket->ShutdownSend();
             localSocket->Close();
@@ -162,7 +185,7 @@ namespace labri {
 
 
         if (current >= total) {
-
+            NS_LOG_FUNCTION(this << "done transmitting");
             localSocket->SetSendCallback(MakeNullCallback<void, Ptr<Socket>, uint32_t>());
             localSocket->ShutdownSend();
             localSocket->Close();
@@ -179,21 +202,22 @@ namespace labri {
             uint32_t toWrite = writeSize - dataOffset;
             toWrite = std::min(toWrite, left);
             toWrite = std::min(toWrite, localSocket->GetTxAvailable());
-            uint8_t *buff = new uint8_t[toWrite];
-            std::memset(buff, indice, sizeof(buff));
+            Ptr<Packet> packet = Create<Packet>(toWrite);
+            NS_LOG_FUNCTION(this << localSocket->GetErrno());
+            int amountSent = localSocket->Send(packet);
 
-            int amountSent = localSocket->Send(buff, sizeof(buff), 0);
-            delete[]buff;
 
             if (amountSent < 0) {
 
+                NS_LOG_FUNCTION(this << "done transmitting with " << amountSent << " byte sent and " << toWrite <<
+                                " requested. Errno is" << localSocket->GetErrno());
                 // we will be called again when new tx space becomes available.
                 return;
             }
             ::g_clientData[m_socketIpMapping[localSocket]]->setCurrentTxBytes(current + amountSent);
             //NS_LOG_FUNCTION(this<< amountSent << "sent" <<  ::g_clientData[m_socketIpMapping[localSocket]]->getCurrentTxBytes());
         }
-
+        NS_LOG_FUNCTION(this << "done transmitting with " << localSocket->GetTxAvailable() << " remaining in buffer");
         localSocket->Close();
         //NS_LOG_FUNCTION(this << Simulator::Now().As(Time::Unit::S) <<                      m_socketData[localSocket].currentTxBytes << m_socketData[localSocket].totalTxBytes);
 

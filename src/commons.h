@@ -134,13 +134,36 @@ private:
     Time m_endDate;
     uint64_t m_currentTxBytes;
     std::string m_ip;
+public:
+    uint16_t getPort() const {
+        return m_port;
+    }
+
+    void setPort(uint16_t port) {
+        ClientDataFromDataSource::m_port = port;
+    }
+
+private:
+    uint16_t m_port;
 
     bool m_dropped = false;
+public:
+    Time const &getDroppedDate() const {
+        return m_droppedDate;
+    }
+
+    void setDroppedDate(Time const &droppedDate) {
+        ClientDataFromDataSource::m_droppedDate = droppedDate;
+    }
+
+private:
+    Time m_droppedDate;
 
 
 };
 
 
 extern std::map<std::string, ClientDataFromDataSource *> g_clientData;
+extern std::map<int, int> newResourcesStartTime;
 
 #endif //SVNF_SIMU_COMMONS_H_QSGQSDFQSDFQSDF

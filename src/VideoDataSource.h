@@ -20,6 +20,7 @@
 
 
 using namespace ns3;
+class ClientDataFromDataSource;
 namespace  labri {
 
 
@@ -63,6 +64,7 @@ namespace  labri {
 
 
         void HandleStreamingRequest(Ptr<Socket> socket);
+        void HandleStreamingRequestInternal(ClientDataFromDataSource* clientData);
 
         void SendPacket(Ptr<Socket> clientSocket, unsigned long total, unsigned long packetSize, DataRate dataRate);
 
@@ -71,6 +73,8 @@ namespace  labri {
         void WriteUntilBufferFull(Ptr<Socket> localSocket, uint32_t txSpace);
 
         void pourData(Ptr<Socket> clientSinkSocket);
+
+        void Noop(Ptr<Socket> localSocket, uint32_t txSpace);
     };
 }
 

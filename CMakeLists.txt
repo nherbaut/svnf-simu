@@ -3,7 +3,7 @@ project(svnf_simu)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/")
 
-SET(CMAKE_BUILD_TYPE "DEBUG")
+#SET(CMAKE_BUILD_TYPE "DEBUG")
 
 find_package(NS3 3.23 REQUIRED core csma network internet point-to-point applications stats)
 find_package(Boost REQUIRED regex )
