@@ -128,12 +128,12 @@ namespace ns3 {
     }
 
     void GwApplication::HandlePeerClose(Ptr<Socket> socket) {
-        NS_LOG_FUNCTION (this << socket);
+        //NS_LOG_FUNCTION (this << socket);
 
     }
 
     void GwApplication::HandlePeerError(Ptr<Socket> socket) {
-        NS_LOG_FUNCTION (this << socket);
+        //NS_LOG_FUNCTION (this << socket);
 
     }
 
@@ -156,7 +156,7 @@ namespace ns3 {
     }
 
     void GwApplication::triggerDownload(Address const target, std::string const resource) {
-        NS_LOG_FUNCTION (this);
+
         Ptr<Socket> socket = Socket::CreateSocket(GetNode(), TcpSocketFactory::GetTypeId());
         socket->Bind();
         socket->Connect(target);

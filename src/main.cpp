@@ -94,12 +94,14 @@ void PacketTraceCallBackPOP(std::string context, const Ptr<const Packet> packet)
 
 
 #ifdef LOG_PACKET
+
 void PacketAddressTrace(std::string context, const Ptr<const Packet> packet, const Address &address) {
 
     int s = boost::lexical_cast<int>(context.substr(10, context.substr(10, context.length() - 10).find("/")));
     clientStats[s].stopDate = Simulator::Now();
     clientStats[s].totalSize += packet->GetSize();
 }
+
 #endif
 
 int
@@ -107,7 +109,7 @@ main(int argc, char *argv[]) {
     bool verbose = true;
     uint32_t nGW = 0;
     double mat = 1;
-    Time END = Seconds(1000);
+    Time END = Time::Max();
 
     double vcs = 1000.;
     double vcv = 200.;
@@ -119,6 +121,8 @@ main(int argc, char *argv[]) {
     uint32_t payloadSize = 100000;
     std::string popDelay = "10ms";
     std::string cpDelay = "20ms";
+    std::string fname = "server-loads";
+    uint32_t nDw = nGW;
 
     CommandLine cmd;
     cmd.AddValue("nGW", "Number of \"extra\" CSMA nodes/devices", nGW);
@@ -133,16 +137,19 @@ main(int argc, char *argv[]) {
     cmd.AddValue("cpBitrate", "Data Rate for cp", cpDataRate);
     cmd.AddValue("popDelay", "delay of the pop", popDelay);
     cmd.AddValue("cpDelay", "delay of the pop", cpDelay);
+    cmd.AddValue("fname", "file Name", fname);
+    cmd.AddValue("nDw", "How many file Download?", nDw);
 
 
     cmd.Parse(argc, argv);
 
 
-
+    fname=fname+boost::lexical_cast<std::string>(cpop)+".csv";
+    std::cout << "output written in" << fname << std::endl;
     //Config::SetDefault("ns3::TcpSocket::SndBufSize", ns3::UintegerValue(100000));
     //Config::SetDefault("ns3::TcpSocket::RcvBufSize", ns3::UintegerValue(100000));
     //Config::SetDefault("ns3::TcpSocket::SegmentSize", ns3::UintegerValue(1460));
-    //Config::SetDefault("ns3::TcpSocketBase::ReTxTimeout",ns3::TimeValue(Seconds(1000)));
+    //Config::SetDefault("ns3::TcpSocketBase::ReTxTimef",ns3::TimeValue(Seconds(1000)));
 
 
 
@@ -193,7 +200,7 @@ main(int argc, char *argv[]) {
     //LogComponentEnable("TcpSocketBase", LOG_LEVEL_ALL);
     //LogComponentEnable("SVNF", LOG_LEVEL_ALL);
     //LogComponentEnable("GwApplication", LOG_LEVEL_ALL);
-    //LogComponentEnable("ClientApplication", LOG_LEVEL_ALL);
+    LogComponentEnable("ClientApplication", LOG_LEVEL_ALL);
     //LogComponentEnable("CachingControllerApplication", LOG_LEVEL_ALL);
     //LogComponentEnable("NscTcpSocketImpl", LOG_LEVEL_ALL);
     //LogComponentEnable("PacketSink", LOG_LEVEL_ALL);
@@ -395,14 +402,34 @@ main(int argc, char *argv[]) {
     const uint16_t dataSourcePort = 18082;
 
 
+    /// APPLICATION THAT WILL SEND THEIR DOWNLOAD REQUESTS
     double currentStartTime = 0;
+
+    std::queue<std::string> clientDataQueue;
+
+    for (int j = 0; j < std::max(nGW, nDw); ++j) {
+        ClientDataFromDataSource *cdfs = new ClientDataFromDataSource(
+                boost::lexical_cast<std::string>(normal->GetInteger()), pv->GetInteger(), DataRate("320kbps"));
+
+        currentStartTime += ev->GetValue();
+        cdfs->setStartDate(Seconds(currentStartTime));
+        cdfs->setEndDate(END);
+        boost::uuids::uuid u = gen();
+        cdfs->setId(boost::lexical_cast<std::string>(u));
+        g_clientData[cdfs->getId()] = cdfs;
+
+
+    }
+
+
+    //installing app on gw and client
     for (int i = 0; i < nGW; i++) {
 
         std::ostringstream ss2;
-        currentStartTime += ev->GetValue();
+
 
         ss2 << "client" << i << "starts at" << currentStartTime;
-        //NS_LOG_UNCOND(ss2.str());
+
 
 
         // GATEWAY
@@ -430,19 +457,9 @@ main(int argc, char *argv[]) {
         //an application to trigger the download from a datasource
 
 
-        ClientDataFromDataSource *cdfs = new ClientDataFromDataSource(
-                boost::lexical_cast<std::string>(normal->GetInteger()), pv->GetInteger(), DataRate("320kbps"));
-        cdfs->setIp(clientAddress);
-        cdfs->setStartDate(Seconds(currentStartTime));
-        cdfs->setEndDate(END);
-        boost::uuids::uuid u = gen();
-        cdfs->setId(boost::lexical_cast<std::string>(u));
-        g_clientData[cdfs->getId()] = cdfs;
-
-
         Ptr<labri::ClientApplication> clientApp = CreateObject<labri::ClientApplication>();
-        clientApp->Setup(InetSocketAddress(gwAddress, signalingPort), InetSocketAddress(clientAddress, dataSourcePort),
-                         cdfs->getId());
+        clientApp->Setup(InetSocketAddress(gwAddress, signalingPort),
+                         InetSocketAddress(clientAddress, dataSourcePort));
 
 
         clientNodes.Get(i)->AddApplication(clientApp);
@@ -456,7 +473,7 @@ main(int argc, char *argv[]) {
 
 
         //check if client receive the right amount of bytes
-        #ifdef LOG_PACKET
+#ifdef LOG_PACKET
         std::ostringstream oss;
         oss << "/NodeList/" << clientNodes.Get(i)->GetId() << "/ApplicationList/*/$ns3::PacketSink/Rx";
         Config::Connect(oss.str(), MakeCallback(&PacketAddressTrace));
@@ -464,9 +481,31 @@ main(int argc, char *argv[]) {
         stats.startDate = Seconds(currentStartTime);
         stats.stopDate = Seconds(currentStartTime);
         clientStats[clientNodes.Get(i)->GetId()] = stats;
-        #endif
+#endif
 
 
+    }
+
+    ////////////////////////////////////////////////////////
+    //assign client data to client app
+    ////////////////////////////////////////////////////////
+
+    //get random queue of client elts
+    std::vector<std::string> clientDataKey;
+    transform(::g_clientData.begin(), ::g_clientData.end(), back_inserter(clientDataKey), RetrieveKey());
+    std::random_shuffle(clientDataKey.begin(), clientDataKey.end());
+    for (std::vector<std::string>::const_iterator it = clientDataKey.begin(); it != clientDataKey.end(); ++it) {
+        clientDataQueue.push(*it);
+    }
+
+    //while we are elts
+    while (!clientDataQueue.empty()) {
+        for (int i = 0; (i < nGW) && (!clientDataQueue.empty()); i++) {
+            Ptr<labri::ClientApplication> clientApp = DynamicCast<labri::ClientApplication>(
+                    clientNodes.Get(i)->GetApplication(0));
+            clientApp->addClientData(clientDataQueue.front());
+            clientDataQueue.pop();
+        }
 
     }
 
@@ -545,7 +584,7 @@ main(int argc, char *argv[]) {
         NS_LOG_UNCOND(ss.str());
 
     }
-    #endif
+#endif
 
     //////////////////////////////::
     // Plot server Loads
@@ -556,7 +595,7 @@ main(int argc, char *argv[]) {
     transform(popDr.begin(), popDr.end(), back_inserter(keys), RetrieveKey());
 
 
-    std::ofstream ofs("server-loads.csv", std::ofstream::out);
+    std::ofstream ofs(fname, std::ofstream::out);
 
 
     std::map<int, int> cumulativeDroppedBySeconds;
@@ -593,7 +632,7 @@ main(int argc, char *argv[]) {
             count_dropped += cumulativeDroppedBySeconds[i];
 
         }
-        ofs << i << "\t" << cpValue << "\t" << popValue << "\t" << count_dropped << std::endl;
+        ofs << i << "\t" << cpValue << "\t" << popValue << "\t" << count_dropped*100./nDw << std::endl;
 
 
     }

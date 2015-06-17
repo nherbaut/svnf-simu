@@ -46,13 +46,13 @@ namespace labri {
 
 
     void CachingControllerApplication::handleExistingResourceAsked(const std::string &str) {
-        NS_LOG_FUNCTION(this);
+        //NS_LOG_FUNCTION(this);
 
     }
 
 
     bool CachingControllerApplication::HandleConnectionRequest(Ptr<Socket> socket, const Address &from) {
-        NS_LOG_FUNCTION(this);
+        //NS_LOG_FUNCTION(this);
         return true;
     }
 
@@ -101,12 +101,12 @@ namespace labri {
 
 
     void CachingControllerApplication::HandlePeerClose(Ptr<Socket> socket) {
-        NS_LOG_FUNCTION(this);
+        //NS_LOG_FUNCTION(this);
         m_acceptedSockets.remove(socket);
     }
 
     void CachingControllerApplication::HandlePeerError(Ptr<Socket> socket) {
-        NS_LOG_FUNCTION(this);
+        //NS_LOG_FUNCTION(this);
         m_acceptedSockets.remove(socket);
     }
 
@@ -119,7 +119,6 @@ namespace labri {
         NS_LOG_FUNCTION(this);
         std::ostringstream buf;
         HandleClientConfigurationInput->Recv()->CopyData(&buf, INT_MAX);
-
         HandleNewResourceAsked(buf.str());
 
 
@@ -127,7 +126,7 @@ namespace labri {
 
     void CachingControllerApplication::UpdateGwConfiguration(
     ) {
-        NS_LOG_FUNCTION(this);
+
         if (dirty) {
             dirty = false;
             const std::string updatedConf = this->serializeConf();
@@ -136,6 +135,7 @@ namespace labri {
             for (std::list<Ptr<Socket>>::const_iterator it = m_gatewaysConn.begin(); it != m_gatewaysConn.end(); ++it) {
                 Ptr<Socket> gw = *it;
                 gw->Send(reinterpret_cast<const uint8_t *>(updatedConf.c_str()), updatedConf.length(), 0);
+                NS_LOG_FUNCTION(this << Simulator::Now().GetSeconds());
 
             }
 
@@ -146,13 +146,13 @@ namespace labri {
 
     void CachingControllerApplication::HandleNewResourceAsked(
             const std::string& clientId) {
-        NS_LOG_FUNCTION(this);
+        NS_LOG_FUNCTION(this << clientId);
 
         ClientDataFromDataSource * cdfs = ClientDataFromDataSource::fromId(clientId);
         if (this->m_hostedResources.count(cdfs->getPayloadId()) == 0 &&
             this->m_PendingResources.count(cdfs->getPayloadId()) == 0) {
             m_PendingResources.insert(cdfs->getPayloadId());
-            Simulator::Schedule(Seconds(10), &CachingControllerApplication::TranscodingAndDeployingDone, this,
+            Simulator::Schedule(Seconds(3), &CachingControllerApplication::TranscodingAndDeployingDone, this,
                                 clientId);
         }
 

@@ -16,6 +16,7 @@
 #include <ns3/pcap-file-wrapper.h>
 
 #include "commons.h"
+#include <climits>
 
 using namespace ns3;
 
@@ -39,22 +40,9 @@ namespace labri {
         }
 
 
-        void Setup(Address SignalingAddr, InetSocketAddress clientDataSink, std::string clientDataId) {
+        void Setup(Address SignalingAddr, InetSocketAddress clientDataSink) {
             m_gwSignalingAddr = SignalingAddr;
             m_clientDataSink = clientDataSink;
-            ClientDataFromDataSource *cdfs=ClientDataFromDataSource::fromId(clientDataId);
-            cdfs->setIp(clientDataSink.GetIpv4());
-            cdfs->setPort(clientDataSink.GetPort());
-            m_clientDatas.push_back(clientDataId);
-
-
-        }
-
-        void Setup(Address SignalingAddr, InetSocketAddress clientDataSink,
-                   std::vector<std::string> clientDataIds) {
-            m_gwSignalingAddr = SignalingAddr;
-            m_clientDataSink = clientDataSink;
-            m_clientDatas.insert(clientDataIds.begin(), clientDataIds.end(), clientDataIds.end());
 
 
         }
@@ -64,7 +52,22 @@ namespace labri {
 
         Address m_gwSignalingAddr;
         InetSocketAddress m_clientDataSink;
+        Time m_startTime = Time::Max();
 
+    public:
+
+        void addClientData(std::string clientDataId) {
+            ClientDataFromDataSource *cdfs = ClientDataFromDataSource::fromId(clientDataId);
+            if ( cdfs->getStartDate()< m_startTime) {
+                m_startTime=cdfs->getStartDate();
+                this->SetStartTime(m_startTime);
+            }
+            cdfs->setPort(this->m_clientDataSink.GetPort());
+            cdfs->setIp(this->m_clientDataSink.GetIpv4());
+            m_clientDatas.push_back(clientDataId);
+        }
+
+    private:
         std::vector<std::string> m_clientDatas;
 
         int m_retry = 0;
@@ -76,7 +79,8 @@ namespace labri {
                  itr != m_clientDatas.end(); ++itr) {
 
 
-                Simulator::Schedule(ClientDataFromDataSource::fromId(*itr)->getStartDate(), &ClientApplication::askForDataSourceToGW, this,
+                Simulator::Schedule(ClientDataFromDataSource::fromId(*itr)->getStartDate()-m_startTime,
+                                    &ClientApplication::askForDataSourceToGW, this,
                                     *itr);
 
             }
@@ -85,8 +89,8 @@ namespace labri {
         }
 
 
-        virtual void askForDataSourceToGW(const std::string& id) {
-            NS_LOG_FUNCTION(this);
+        virtual void askForDataSourceToGW(const std::string &id) {
+            NS_LOG_FUNCTION(this << Simulator::Now().GetSeconds());
             ClientDataFromDataSource *clientData = ClientDataFromDataSource::fromId(id);
             Ptr<Socket> socket = Socket::CreateSocket(GetNode(), TcpSocketFactory::GetTypeId());
 
@@ -97,7 +101,7 @@ namespace labri {
             socket->Connect(this->m_gwSignalingAddr);
 
 
-            socket->Send(reinterpret_cast<const uint8_t *>(id.c_str()), id.length(),0);
+            socket->Send(reinterpret_cast<const uint8_t *>(id.c_str()), id.length(), 0);
             socket->Close();
 
         }

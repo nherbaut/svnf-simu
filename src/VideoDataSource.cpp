@@ -170,7 +170,7 @@ namespace labri {
             NS_LOG_FUNCTION(this << "we are too low" << currentDataRate << targetDataRate);
             ClientDataFromDataSource *cdfs = ClientDataFromDataSource::fromId(m_socketIpMapping[localSocket]);
             cdfs->setDropped(true);
-            cdfs->setDroppedDate(Simulator::Now());
+            cdfs->setDroppedDate(cdfs->getStartDate());
 
             localSocket->SetSendCallback(MakeNullCallback<void, Ptr<Socket>, uint32_t>());
             localSocket->ShutdownSend();
