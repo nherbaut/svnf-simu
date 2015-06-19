@@ -32,9 +32,10 @@ namespace labri {
     }
 
 
-    void VideoDataSource::Setup(InetSocketAddress control, DataRate channelDataRate) {
+    void VideoDataSource::Setup(const std::string& name,InetSocketAddress control, DataRate channelDataRate) {
         m_controlAddr = control;
         m_channelRate = channelDataRate.GetBitRate();
+        m_name=name;
     }
 
     void VideoDataSource::StartApplication() {
@@ -57,7 +58,7 @@ namespace labri {
 
     }
 
-    VideoDataSource::VideoDataSource() : m_controlAddr(""), m_controlSocket(0) {
+    VideoDataSource::VideoDataSource() : m_controlAddr(""), m_controlSocket(0), m_name("") {
 
     }
 
@@ -119,9 +120,9 @@ namespace labri {
     }
 
     void VideoDataSource::pourData(Ptr<Socket> clientSinkSocket) {
-        /*NS_LOG_FUNCTION(this << ::g_clientData[m_socketIpMapping[clientSinkSocket]]->getIp() << "remaining" <<
+        NS_LOG_FUNCTION(this << ::g_clientData[m_socketIpMapping[clientSinkSocket]]->getIp() << "remaining" <<
                         (::g_clientData[m_socketIpMapping[clientSinkSocket]]->getTotalTxBytes() -
-                         ::g_clientData[m_socketIpMapping[clientSinkSocket]]->getCurrentTxBytes()));*/
+                         ::g_clientData[m_socketIpMapping[clientSinkSocket]]->getCurrentTxBytes()));
         clientSinkSocket->SetSendCallback(MakeCallback(&VideoDataSource::WriteUntilBufferFull, this));
 
         WriteUntilBufferFull(clientSinkSocket, clientSinkSocket->GetTxAvailable());
@@ -129,7 +130,8 @@ namespace labri {
 
 
     void VideoDataSource::WriteUntilBufferFull(Ptr<Socket> localSocket, uint32_t txSpace) {
-
+        NS_LOG_FUNCTION(this);
+        //std::cout<<"WriteUntilBufferFull" << Simulator::Now().GetSeconds()<<std::endl;
         //NS_LOG_FUNCTION(this << ::g_clientData[m_socketIpMapping[localSocket]]->getIp());
 
         ClientDataFromDataSource *cdfs = ClientDataFromDataSource::fromId(m_socketIpMapping[localSocket]);
@@ -160,22 +162,32 @@ namespace labri {
             localSocket->SetSendCallback(MakeNullCallback<void, Ptr<Socket>, uint32_t>());
             localSocket->ShutdownSend();
             localSocket->Close();
+
             m_socketIpMapping.erase(localSocket);
+
+
             return;
 
 
         }
-        else if ((currentDataRate < targetDataRate.GetBitRate() * 0.5) && elapsedSecond > 30) {
+        else if ((currentDataRate < targetDataRate.GetBitRate()*0.90 ) && elapsedSecond > 3) {
             //NS_LOG_FUNCTION(this << "low threshold");
-            NS_LOG_FUNCTION(this << "we are too low" << currentDataRate << targetDataRate);
+            NS_LOG_FUNCTION(this << "we are too low for " << m_socketIpMapping[localSocket] << currentDataRate << targetDataRate<< " at "  << Simulator::Now());
             ClientDataFromDataSource *cdfs = ClientDataFromDataSource::fromId(m_socketIpMapping[localSocket]);
+            std::cout<<Simulator::Now().GetSeconds()<<std::endl;
             cdfs->setDropped(true);
-            cdfs->setDroppedDate(cdfs->getStartDate());
+            //cdfs->setDroppedDate(cdfs->getStartDate());
+            cdfs->setDroppedDate(Simulator::Now());
+            cdfs->setDroppedFromName(this->m_name);
 
             localSocket->SetSendCallback(MakeNullCallback<void, Ptr<Socket>, uint32_t>());
             localSocket->ShutdownSend();
             localSocket->Close();
             m_socketIpMapping.erase(localSocket);
+            if(m_socketIpMapping.size()==0){
+                std::cout << "no more client..." << std::endl;
+            }
+            return;
 
         }
 

@@ -38,9 +38,11 @@ public:
 
 
 class ClientDataFromDataSource;
-extern std::map<std::string, ClientDataFromDataSource *> g_clientData;
-extern std::map<int, int> newResourcesStartTime;
 
+extern std::map<std::string, ClientDataFromDataSource *> g_clientData;
+extern double g_transcodingTime;
+extern double g_gwUpdateDelay;
+extern uint16_t g_countBeforeCache;
 
 class ClientDataFromDataSource {
 public:
@@ -137,7 +139,7 @@ public:
         ClientDataFromDataSource::m_dropped = dropped;
     }
 
-    static ClientDataFromDataSource* fromId(std::string id){
+    static ClientDataFromDataSource *fromId(std::string id) {
         return ::g_clientData[id];
     }
 
@@ -150,6 +152,7 @@ private:
     Time m_endDate;
     uint64_t m_currentTxBytes;
     std::string m_ip;
+
 public:
     std::string getId() const {
         return m_id;
@@ -158,7 +161,6 @@ public:
     void setId(std::string id) {
         ClientDataFromDataSource::m_id = id;
     }
-
 
 
 private:
@@ -198,6 +200,17 @@ private:
 
     bool m_dropped = false;
 public:
+    std::string getDroppedFromId() const {
+        return m_droppedName;
+    }
+
+    void setDroppedFromName(const std::string& name) {
+        ClientDataFromDataSource::m_droppedName = name;
+    }
+
+private:
+    std::string m_droppedName;
+public:
     Time const &getDroppedDate() const {
         return m_droppedDate;
     }
@@ -211,7 +224,6 @@ private:
 
 
 };
-
 
 
 

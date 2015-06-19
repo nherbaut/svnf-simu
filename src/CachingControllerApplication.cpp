@@ -14,6 +14,7 @@
 
 #include <ns3/config.h>
 #include <ns3/string.h>
+#include "commons.h"
 
 namespace labri {
 
@@ -145,28 +146,37 @@ namespace labri {
     }
 
     void CachingControllerApplication::HandleNewResourceAsked(
-            const std::string& clientId) {
+            const std::string &clientId) {
         NS_LOG_FUNCTION(this << clientId);
 
-        ClientDataFromDataSource * cdfs = ClientDataFromDataSource::fromId(clientId);
+        ClientDataFromDataSource *cdfs = ClientDataFromDataSource::fromId(clientId);
         if (this->m_hostedResources.count(cdfs->getPayloadId()) == 0 &&
             this->m_PendingResources.count(cdfs->getPayloadId()) == 0) {
-            m_PendingResources.insert(cdfs->getPayloadId());
-            Simulator::Schedule(Seconds(3), &CachingControllerApplication::TranscodingAndDeployingDone, this,
-                                clientId);
+
+            if (m_countResourceRequests.count(cdfs->getPayloadId())) {
+                m_countResourceRequests[cdfs->getPayloadId()] = 0;
+            }
+            m_countResourceRequests[cdfs->getPayloadId()] += 1;
+            if (m_countResourceRequests[cdfs->getPayloadId()] >= ::g_countBeforeCache) {
+                m_PendingResources.insert(cdfs->getPayloadId());
+                Simulator::Schedule(Seconds(g_transcodingTime),
+                                    &CachingControllerApplication::TranscodingAndDeployingDone, this,
+                                    clientId);
+            }
         }
 
 
     }
 
-    void CachingControllerApplication::TranscodingAndDeployingDone(const std::string& clientId) {
-        ClientDataFromDataSource * cdfs = ClientDataFromDataSource::fromId(clientId);
+    void CachingControllerApplication::TranscodingAndDeployingDone(const std::string &clientId) {
+        ClientDataFromDataSource *cdfs = ClientDataFromDataSource::fromId(clientId);
 
         this->dirty = true;
         this->m_hostedResources.insert(cdfs->getPayloadId());
         this->m_PendingResources.erase(cdfs->getPayloadId());
         if (this->event_Id.IsExpired()) {
-            this->event_Id = Simulator::Schedule(Seconds(2), &CachingControllerApplication::UpdateGwConfiguration,
+            this->event_Id = Simulator::Schedule(Seconds(g_gwUpdateDelay),
+                                                 &CachingControllerApplication::UpdateGwConfiguration,
                                                  this);
         }
 

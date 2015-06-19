@@ -42,7 +42,7 @@ namespace labri {
         std::list<Ptr<Socket> > m_gatewaysConn;
         std::set<std::string> m_hostedResources;
         std::set<std::string> m_PendingResources;
-
+        std::map<std::string,int> m_countResourceRequests;
         InetSocketAddress m_configuration;
         bool dirty=false;
 

@@ -31,7 +31,7 @@ namespace  labri {
 
         static TypeId GetTypeId(void);
 
-        void Setup(InetSocketAddress control, DataRate channelDataRate);
+        void Setup(const std::string& name,InetSocketAddress control, DataRate channelDataRate);
 
         virtual void StartApplication(void);
 
@@ -77,6 +77,7 @@ namespace  labri {
         void Noop(Ptr<Socket> localSocket, uint32_t txSpace);
 
         static int client;
+        std::string m_name;
     };
 }
 

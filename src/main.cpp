@@ -72,6 +72,17 @@ DataRateTrace(uint32_t oldValue, uint32_t newValue) {
 
 std::map<int, ServerPlotData> cpDr;
 std::map<int, ServerPlotData> popDr;
+std::map<int, int> totalVidCountMap;
+
+void countTotalVid(double startTimeInSec) {
+
+    int second = (int) std::round(startTimeInSec);
+    if (!totalVidCountMap.count(second)) {
+        totalVidCountMap[second] = 0;
+    }
+    totalVidCountMap[second] += 1;
+
+}
 
 void PacketTraceCallBackCP(std::string context, const Ptr<const Packet> packet) {
 
@@ -104,6 +115,9 @@ void PacketAddressTrace(std::string context, const Ptr<const Packet> packet, con
 
 #endif
 
+double g_transcodingTime=3;
+double g_gwUpdateDelay=10;
+uint16_t g_countBeforeCache=1;
 int
 main(int argc, char *argv[]) {
     bool verbose = true;
@@ -113,7 +127,20 @@ main(int argc, char *argv[]) {
 
     double vcs = 1000.;
     double vcv = 200.;
+
+    double peak_vcs = 1000.;
+    double peak_vcv = 200.;
+
     int cpop = 1;
+
+
+
+    /////////// PEAK
+    uint32_t  peak_vidCount=0;
+    double peak_vidStartTimeInSec=0;
+    double peak_MeanArrivalTime=0;
+
+
 
 
     char popDataRate[30] = "100kbps";
@@ -131,6 +158,10 @@ main(int argc, char *argv[]) {
     cmd.AddValue("as", "payload average size", payloadSize);
     cmd.AddValue("vcs", "video corpus size", vcs);
     cmd.AddValue("vcv", "video corpus variance", vcv);
+
+    cmd.AddValue("PeakVcs", "Peak video corpus size", peak_vcs);
+    cmd.AddValue("PeakVcv", "Peak video corpus variance", peak_vcv);
+
     cmd.AddValue("cpop", "remove pop", cpop);
 
     cmd.AddValue("popBitrate", "Data Rate for POP", popDataRate);
@@ -139,12 +170,25 @@ main(int argc, char *argv[]) {
     cmd.AddValue("cpDelay", "delay of the pop", cpDelay);
     cmd.AddValue("fname", "file Name", fname);
     cmd.AddValue("nDw", "How many file Download?", nDw);
+    cmd.AddValue("transTime", "Average Transcoding time", g_transcodingTime);
+    cmd.AddValue("gwUp", "Max GW configuration refresh time", g_gwUpdateDelay);
+
+    cmd.AddValue("pVidCount", "Peak Video Count", peak_vidCount);
+    cmd.AddValue("pStart", "peak Start Time", peak_vidStartTimeInSec);
+    cmd.AddValue("pMeanArrTime", "Peak Mean arrival Time", peak_MeanArrivalTime);
+    cmd.AddValue("countBeforeCache", "How many request must we receive before caching", g_countBeforeCache);
+
+
+
+
+    double g_transcodingTime=3;
+    double g_gwUpdateDelay=10;
 
 
     cmd.Parse(argc, argv);
 
 
-    fname=fname+boost::lexical_cast<std::string>(cpop)+".csv";
+    fname = fname + boost::lexical_cast<std::string>(cpop) + ".csv";
     std::cout << "output written in" << fname << std::endl;
     //Config::SetDefault("ns3::TcpSocket::SndBufSize", ns3::UintegerValue(100000));
     //Config::SetDefault("ns3::TcpSocket::RcvBufSize", ns3::UintegerValue(100000));
@@ -197,18 +241,20 @@ main(int argc, char *argv[]) {
 
 
     //LogComponentEnable("Ipv4StaticRouting", LOG_LEVEL_ALL);
+    //LogComponentEnable("Simulator", LOG_LEVEL_ALL);
     //LogComponentEnable("TcpSocketBase", LOG_LEVEL_ALL);
     //LogComponentEnable("SVNF", LOG_LEVEL_ALL);
-    //LogComponentEnable("GwApplication", LOG_LEVEL_ALL);
-    LogComponentEnable("ClientApplication", LOG_LEVEL_ALL);
-    //LogComponentEnable("CachingControllerApplication", LOG_LEVEL_ALL);
     //LogComponentEnable("NscTcpSocketImpl", LOG_LEVEL_ALL);
-    //LogComponentEnable("PacketSink", LOG_LEVEL_ALL);
-    //LogComponentEnable("VideoDataSource", LOG_LEVEL_ALL);
+
     //LogComponentEnable("TcpTxBuffer", LOG_LEVEL_ALL);
     //LogComponentEnable("TcpNewReno", LOG_LEVEL_ALL);$
     //LogComponentEnable("Ipv4StaticRouting", LOG_LEVEL_ALL);
 
+    //LogComponentEnable("CachingControllerApplication", LOG_LEVEL_ALL);
+    //LogComponentEnable("GwApplication", LOG_LEVEL_ALL);
+    //LogComponentEnable("ClientApplication", LOG_LEVEL_ALL);
+    //LogComponentEnable("VideoDataSource", LOG_LEVEL_ALL);
+    //LogComponentEnable("PacketSink", LOG_LEVEL_ALL);
 
 
     ///////////////////////////////////////////////::
@@ -403,8 +449,9 @@ main(int argc, char *argv[]) {
 
 
     /// APPLICATION THAT WILL SEND THEIR DOWNLOAD REQUESTS
-    double currentStartTime = 0;
 
+
+    double currentStartTime = 0;
     std::queue<std::string> clientDataQueue;
 
     for (int j = 0; j < std::max(nGW, nDw); ++j) {
@@ -412,7 +459,9 @@ main(int argc, char *argv[]) {
                 boost::lexical_cast<std::string>(normal->GetInteger()), pv->GetInteger(), DataRate("320kbps"));
 
         currentStartTime += ev->GetValue();
-        cdfs->setStartDate(Seconds(currentStartTime));
+        std::cout << currentStartTime << std::endl;
+        countTotalVid(currentStartTime );
+        cdfs->setStartDate(Seconds(currentStartTime ));
         cdfs->setEndDate(END);
         boost::uuids::uuid u = gen();
         cdfs->setId(boost::lexical_cast<std::string>(u));
@@ -421,7 +470,33 @@ main(int argc, char *argv[]) {
 
     }
 
+    // PEAK TARFFIC
 
+    Ptr<NormalRandomVariable> peakNormal = CreateObject<NormalRandomVariable>();
+    peakNormal ->SetAttribute("Mean", DoubleValue(peak_vcs));
+    peakNormal ->SetAttribute("Variance", DoubleValue(peak_vcv));
+
+
+    Ptr<ExponentialRandomVariable> evPeak = CreateObject<ExponentialRandomVariable>();
+    evPeak->SetAttribute("Mean", DoubleValue(peak_MeanArrivalTime));
+
+    for(int i=0;i<peak_vidCount;++i){
+
+        ClientDataFromDataSource *cdfs = new ClientDataFromDataSource(
+                boost::lexical_cast<std::string>(peakNormal ->GetInteger()), pv->GetInteger(), DataRate("320kbps"));
+
+        peak_vidStartTimeInSec+= evPeak->GetValue();
+        countTotalVid(peak_vidStartTimeInSec);
+        cdfs->setStartDate(Seconds(peak_vidStartTimeInSec));
+        cdfs->setEndDate(END);
+        boost::uuids::uuid u = gen();
+        cdfs->setId(boost::lexical_cast<std::string>(u));
+        g_clientData[cdfs->getId()] = cdfs;
+
+    }
+
+
+    std::cout << "a total of " << g_clientData.size() << " video will be downloaded" << std::endl;
     //installing app on gw and client
     for (int i = 0; i < nGW; i++) {
 
@@ -429,6 +504,7 @@ main(int argc, char *argv[]) {
 
 
         ss2 << "client" << i << "starts at" << currentStartTime;
+
 
 
 
@@ -522,7 +598,7 @@ main(int argc, char *argv[]) {
 
     //CP Data Source
     Ptr<labri::VideoDataSource> cpDSApp = CreateObject<labri::VideoDataSource>();
-    cpDSApp->Setup(InetSocketAddress(cpIpV4Addr, signalingPort), DataRate(cpDataRate));
+    cpDSApp->Setup("CP", InetSocketAddress(cpIpV4Addr, signalingPort), DataRate(cpDataRate));
     cp->AddApplication(cpDSApp);
     cpDSApp->SetStartTime(Seconds(0));
     cpDSApp->SetStopTime(END);
@@ -530,7 +606,7 @@ main(int argc, char *argv[]) {
 
     //POP Data Source
     Ptr<labri::VideoDataSource> popDSApp = CreateObject<labri::VideoDataSource>();
-    popDSApp->Setup(InetSocketAddress(popIpV4Addr, signalingPort), DataRate(popDataRate));
+    popDSApp->Setup("POP", InetSocketAddress(popIpV4Addr, signalingPort), DataRate(popDataRate));
     pop->AddApplication(popDSApp);
     popDSApp->SetStartTime(Seconds(0));
     popDSApp->SetStopTime(END);
@@ -599,32 +675,68 @@ main(int argc, char *argv[]) {
 
 
     std::map<int, int> cumulativeDroppedBySeconds;
+    std::map<int, int> cumulativeDroppedBySecondsPOP;
+    std::map<int, int> cumulativeDroppedBySecondsCP;
 
     for (std::map<std::string, ClientDataFromDataSource *>::const_iterator itr = g_clientData.begin();
          itr != g_clientData.end(); ++itr) {
         if ((*itr).second->isDropped()) {
             int second = (int) std::round((*itr).second->getDroppedDate().GetSeconds());
-            if (cumulativeDroppedBySeconds.count(second)) {
+
+            if (!cumulativeDroppedBySeconds.count(second)) {
                 cumulativeDroppedBySeconds[second] = 0;
             }
             cumulativeDroppedBySeconds[second] += 1;
+
+            if ((*itr).second->getDroppedFromId().compare("POP")) {
+                if (!cumulativeDroppedBySecondsPOP.count(second)) {
+                    cumulativeDroppedBySecondsPOP[second] = 0;
+                }
+                cumulativeDroppedBySecondsPOP[second] += 1;
+            }
+
+            if ((*itr).second->getDroppedFromId().compare("CP")) {
+                if (!cumulativeDroppedBySecondsCP.count(second)) {
+                    cumulativeDroppedBySecondsCP[second] = 0;
+                }
+                cumulativeDroppedBySecondsCP[second] += 1;
+            }
         }
+
+
     }
 
+
     int count_dropped = 0;
+    int count_dropped_POP = 0;
+    int count_dropped_CP = 0;
+    int count_total_vid=0;
+
     std::pair<std::vector<int>::const_iterator, std::vector<int>::const_iterator> minmax = std::minmax_element(
             keys.begin(), keys.end());
-    for (int i = *(minmax.first); i <= *(minmax.second); ++i) {
+    for (
+            int i = *(minmax.first);
+            i <= *(minmax.second); ++i) {
 
         double popValue = 0;
         double cpValue = 0;
 
+        int count_dropped = 0;
+        int count_dropped_POP = 0;
+        int count_dropped_CP = 0;
 
-        if (cpDr.count(i)) {
+
+        if(totalVidCountMap.count(i)){
+            count_total_vid+=totalVidCountMap[i];
+        }
+
+        if (cpDr.count(i)
+                ) {
             cpValue = cpDr[i].totalSizeTransmitted;
         }
 
-        if (popDr.count(i)) {
+        if (popDr.count(i)
+                ) {
             popValue = popDr[i].totalSizeTransmitted;
         }
 
@@ -632,7 +744,21 @@ main(int argc, char *argv[]) {
             count_dropped += cumulativeDroppedBySeconds[i];
 
         }
-        ofs << i << "\t" << cpValue << "\t" << popValue << "\t" << count_dropped*100./nDw << std::endl;
+
+
+        if (cumulativeDroppedBySecondsPOP.count(i)) {
+            count_dropped_POP += cumulativeDroppedBySecondsPOP[i];
+
+        }
+
+        if (cumulativeDroppedBySecondsCP.count(i)) {
+            count_dropped_CP += cumulativeDroppedBySecondsCP[i];
+
+        }
+
+
+        ofs << i << "\t" << cpValue << "\t" << popValue << "\t" << count_dropped << "\t" << count_total_vid  << "\t"  << count_dropped_POP << "\t" << count_dropped_CP  <<
+        std::endl;
 
 
     }
@@ -640,9 +766,16 @@ main(int argc, char *argv[]) {
 
 
     Simulator::Destroy();
-    for (std::map<std::string, ClientDataFromDataSource *>::const_iterator itr = g_clientData.begin();
-         itr != g_clientData.end(); ++itr) {
-        delete (*itr).second;
+
+    for (
+            std::map<std::string, ClientDataFromDataSource *>::const_iterator itr = g_clientData.begin();
+            itr != g_clientData.
+
+                    end();
+
+            ++itr) {
+        delete (*itr).
+                second;
     }
 
 
