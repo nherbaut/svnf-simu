@@ -176,8 +176,8 @@ namespace labri {
             ClientDataFromDataSource *cdfs = ClientDataFromDataSource::fromId(m_socketIpMapping[localSocket]);
             std::cout<<Simulator::Now().GetSeconds()<<std::endl;
             cdfs->setDropped(true);
-            //cdfs->setDroppedDate(cdfs->getStartDate());
-            cdfs->setDroppedDate(Simulator::Now());
+            cdfs->setDroppedDate(cdfs->getStartDate());
+            //cdfs->setDroppedDate(Simulator::Now());
             cdfs->setDroppedFromName(this->m_name);
 
             localSocket->SetSendCallback(MakeNullCallback<void, Ptr<Socket>, uint32_t>());

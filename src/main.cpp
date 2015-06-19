@@ -757,7 +757,7 @@ main(int argc, char *argv[]) {
         }
 
 
-        ofs << i << "\t" << cpValue << "\t" << popValue << "\t" << count_dropped << "\t" << count_total_vid  << "\t"  << count_dropped_POP << "\t" << count_dropped_CP  <<
+        ofs << i << "\t" << cpValue << "\t" << popValue << "\t" << count_dropped << "\t" << totalVidCountMap[i]  << "\t"  << count_dropped_POP << "\t" << count_dropped_CP  <<
         std::endl;
 
 
