@@ -455,11 +455,12 @@ main(int argc, char *argv[]) {
     std::queue<std::string> clientDataQueue;
 
     for (int j = 0; j < std::max(nGW, nDw); ++j) {
+        int id=normal->GetInteger();
         ClientDataFromDataSource *cdfs = new ClientDataFromDataSource(
-                boost::lexical_cast<std::string>(normal->GetInteger()), pv->GetInteger(), DataRate("320kbps"));
-
+                boost::lexical_cast<std::string>(id), pv->GetInteger(), DataRate("320kbps"));
+        std::cout << id << std::endl;
         currentStartTime += ev->GetValue();
-        std::cout << currentStartTime << std::endl;
+
         countTotalVid(currentStartTime );
         cdfs->setStartDate(Seconds(currentStartTime ));
         cdfs->setEndDate(END);
@@ -481,10 +482,11 @@ main(int argc, char *argv[]) {
     evPeak->SetAttribute("Mean", DoubleValue(peak_MeanArrivalTime));
 
     for(int i=0;i<peak_vidCount;++i){
-
+    int id=peakNormal ->GetInteger();
         ClientDataFromDataSource *cdfs = new ClientDataFromDataSource(
-                boost::lexical_cast<std::string>(peakNormal ->GetInteger()), pv->GetInteger(), DataRate("320kbps"));
+                boost::lexical_cast<std::string>(id), pv->GetInteger(), DataRate("320kbps"));
 
+        std::cout << id << std::endl;
         peak_vidStartTimeInSec+= evPeak->GetValue();
         countTotalVid(peak_vidStartTimeInSec);
         cdfs->setStartDate(Seconds(peak_vidStartTimeInSec));

@@ -153,7 +153,7 @@ namespace labri {
         if (this->m_hostedResources.count(cdfs->getPayloadId()) == 0 &&
             this->m_PendingResources.count(cdfs->getPayloadId()) == 0) {
 
-            if (m_countResourceRequests.count(cdfs->getPayloadId())) {
+            if (m_countResourceRequests.count(cdfs->getPayloadId())==0) {
                 m_countResourceRequests[cdfs->getPayloadId()] = 0;
             }
             m_countResourceRequests[cdfs->getPayloadId()] += 1;
