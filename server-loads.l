@@ -12,7 +12,7 @@ init(x) = (back1_1 = back2_1 = back3_1 = back4_1 = back5_1 = back1_2 = back2_2 =
 
 set multiplot layout 2, 2
 set grid x y2
-set xrange [0:300]
+
 set xtics 30
 
 
@@ -32,7 +32,7 @@ datafile = "./build/server-loads0.csv"
 set title "Requested Videos"
 
 set ylabel "# of requests per seconds"
-
+set xrange [0:120]
 set yrange [0:25]
 set y2range [0:120]
 #set origin 0.0,0.5
@@ -42,25 +42,25 @@ set y2range [0:20]
 
 set ylabel "# of Mbit transmitted"
 set xlabel ''
-set title "Throughput and SLA violation with CP network alone"
+set title "Throughput for CP network alone"
 #
 
 
 plot  sum=init(0),\
-datafile using 1:($2/1000000)          axes x1y1 title "content provider"          lt rgb "green"                 with lines , \
+datafile using 1:($2/1000000)          axes x1y1 title "content provider network throughput"          lt rgb "green"                 with lines , \
 #datafile using 1:(avg5($4))         axes x1y2 title  "sla violation"              lt rgb "red"                 with lines ,\
 #datafile using 1:((sum = sum + $4)) axes x1y2 title  "sla violation cumulated"     lt rgb "red" dashtype '.'     with lines  
 
 #
 
 #########
-set title "Throughput and SLA violation with a POP 1";
+set title "Throughput when a POP is added";
 
 datafile = "./build/server-loads1.csv"
 #
 plot sum=init(0), \
-datafile using 1:($2/1000000)         axes x1y1 title "content provider load"         lt rgb "green"     with lines        , \
-datafile using 1:($3/1000000)          axes x1y1 title  "pop load"                     lt rgb "blue" with lines, \
+datafile using 1:($2/1000000)         axes x1y1 title "content provider network throughput"         lt rgb "green"     with lines        , \
+datafile using 1:($3/1000000)          axes x1y1 title  "pop throughput"                     lt rgb "blue" with lines, \
 #datafile using 1:((sum = sum + $4)) axes x1y2 title  "sla violation cumulated"        lt rgb "red" dashtype '.' with lines,\
 #set title "with POP"
 #show y2range
@@ -68,17 +68,21 @@ datafile using 1:($3/1000000)          axes x1y1 title  "pop load"              
 
 
 ##############""
-
-set yrange [0:15]
-set y2range [0:700]
+#unset y2tics
+set xrange [0:60]
+set yrange [0:45]
+set y2range [0:70]
 pop = "./build/server-loads1.csv"
 cp = "./build/server-loads0.csv"
 set origin 0, 0.0
 set size 1, 0.5
-set key top left
-sum1=sum2=sum3=0
-plot sum=init(0),pop using 1:(avg5_3($4))             axes x1y1     title  "sla violation for POP"             lt rgb "blue"  with lines,\
-cp using 1:(avg5_2($4))             axes x1y1     title  "sla violation without CP"             lt rgb "green"  with lines,\
+set key bottom right
+sum1=sum2=sum3=sum_cp=sum_pop=0
+plot sum=init(0),\
+pop using 1:(avg5_3($4))             axes x1y1     title  "Count of SLA violation for CP + POP"             lt rgb "blue"  with lines,\
+pop using 1:((sum_pop=sum_pop+$4))             axes x1y2     title  "Cummulated Count of SLA violation for CP + POP"             lt rgb "blue"   dt "..-"  with lines  ,\
+cp using 1:(avg5_2($4))             axes x1y1     title  "Count of SLA violation for CP alone"             lt rgb "green"  with lines,\
+cp using 1:((sum_cp=sum_cp+$4))             axes x1y2     title  "Cummulated Count of SLA violation for CP alone"             lt rgb "green" dt "..-" with lines,\
 cp using 1:(avg5_1($5))       axes x1y1     title  "Request per seconds"            lt rgb "red" with lines
 pause -1
 

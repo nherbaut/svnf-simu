@@ -691,18 +691,21 @@ main(int argc, char *argv[]) {
             }
             cumulativeDroppedBySeconds[second] += 1;
 
-            if ((*itr).second->getDroppedFromId().compare("POP")) {
+            if (((*itr).second->getDroppedFromId().compare("POP"))==0) {
                 if (!cumulativeDroppedBySecondsPOP.count(second)) {
                     cumulativeDroppedBySecondsPOP[second] = 0;
                 }
                 cumulativeDroppedBySecondsPOP[second] += 1;
             }
 
-            if ((*itr).second->getDroppedFromId().compare("CP")) {
+            else if (((*itr).second->getDroppedFromId().compare("CP"))==0) {
                 if (!cumulativeDroppedBySecondsCP.count(second)) {
                     cumulativeDroppedBySecondsCP[second] = 0;
                 }
                 cumulativeDroppedBySecondsCP[second] += 1;
+            }
+            else{
+                std::cout << "DROP FROM " << (*itr).second->getDroppedFromId() << " weired" << std::endl;
             }
         }
 
@@ -729,32 +732,30 @@ main(int argc, char *argv[]) {
         int count_dropped_CP = 0;
 
 
-        if(totalVidCountMap.count(i)){
+        if(totalVidCountMap.count(i)!=0){
             count_total_vid+=totalVidCountMap[i];
         }
 
-        if (cpDr.count(i)
-                ) {
+        if (cpDr.count(i)>0) {
             cpValue = cpDr[i].totalSizeTransmitted;
         }
 
-        if (popDr.count(i)
-                ) {
+        if (popDr.count(i)>0) {
             popValue = popDr[i].totalSizeTransmitted;
         }
 
-        if (cumulativeDroppedBySeconds.count(i)) {
+        if (cumulativeDroppedBySeconds.count(i)>0) {
             count_dropped += cumulativeDroppedBySeconds[i];
 
         }
 
 
-        if (cumulativeDroppedBySecondsPOP.count(i)) {
+        if (cumulativeDroppedBySecondsPOP.count(i)>0) {
             count_dropped_POP += cumulativeDroppedBySecondsPOP[i];
 
         }
 
-        if (cumulativeDroppedBySecondsCP.count(i)) {
+        if (cumulativeDroppedBySecondsCP.count(i)>0) {
             count_dropped_CP += cumulativeDroppedBySecondsCP[i];
 
         }
