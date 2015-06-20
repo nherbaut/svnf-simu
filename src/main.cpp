@@ -252,7 +252,7 @@ main(int argc, char *argv[]) {
     //LogComponentEnable("Ipv4StaticRouting", LOG_LEVEL_ALL);
 
     //LogComponentEnable("CachingControllerApplication", LOG_LEVEL_ALL);
-    //LogComponentEnable("GwApplication", LOG_LEVEL_ALL);
+    LogComponentEnable("GwApplication", LOG_LEVEL_ALL);
     //LogComponentEnable("ClientApplication", LOG_LEVEL_ALL);
     //LogComponentEnable("VideoDataSource", LOG_LEVEL_ALL);
     //LogComponentEnable("PacketSink", LOG_LEVEL_ALL);
@@ -459,7 +459,7 @@ main(int argc, char *argv[]) {
         int id=normal->GetInteger();
         ClientDataFromDataSource *cdfs = new ClientDataFromDataSource(
                 boost::lexical_cast<std::string>(id), pv->GetInteger(), DataRate("320kbps"));
-        std::cout << id << std::endl;
+
         currentStartTime += ev->GetValue();
 
         countTotalVid(currentStartTime );
@@ -760,7 +760,13 @@ main(int argc, char *argv[]) {
         }
 
 
-        ofs << i << "\t" << std::setprecision(3) << std::setw(10) << cpValue << "\t" << popValue << "\t" << count_dropped << "\t" << totalVidCountMap[i]  << "\t"  << count_dropped_POP << "\t" << count_dropped_CP  <<
+        ofs << i << "\t" << std::setprecision(3) << std::setw(10)
+        << cpValue << "\t"              //2
+        << popValue << "\t"             //3
+        << count_dropped << "\t"        //4
+        << totalVidCountMap[i]  << "\t" //5
+        << count_dropped_POP << "\t"    //6
+        << count_dropped_CP  <<         //7
         std::endl;
 
 

@@ -170,7 +170,7 @@ namespace labri {
 
 
         }
-        else if ((currentDataRate < targetDataRate.GetBitRate()*0.90 ) && elapsedSecond > 3) {
+        else if ((currentDataRate < targetDataRate.GetBitRate()*0.50 ) && elapsedSecond > 15) {
             //NS_LOG_FUNCTION(this << "low threshold");
             NS_LOG_FUNCTION(this << "we are too low for " << m_socketIpMapping[localSocket] << currentDataRate << targetDataRate<< " at "  << Simulator::Now());
             ClientDataFromDataSource *cdfs = ClientDataFromDataSource::fromId(m_socketIpMapping[localSocket]);

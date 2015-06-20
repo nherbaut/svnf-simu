@@ -54,7 +54,7 @@ namespace ns3 {
                               InetSocketAddress signalingCPAddr,
                               InetSocketAddress configurationPOPAddr) {
 
-        NS_LOG_FUNCTION(this << local.GetIpv4() << signalingPOPAddr.GetIpv4()<< signalingCPAddr.GetIpv4()<< configurationPOPAddr.GetIpv4());
+        //NS_LOG_FUNCTION(this << local.GetIpv4() << signalingPOPAddr.GetIpv4()<< signalingCPAddr.GetIpv4()<< configurationPOPAddr.GetIpv4());
         m_local = local;
         m_signalingPOPAddr = signalingPOPAddr;
         m_signalingCPAddr = signalingCPAddr;
@@ -73,7 +73,7 @@ namespace ns3 {
 
         ClientDataFromDataSource cdfs=*(ClientDataFromDataSource::fromId(buf.str()));
 
-        NS_LOG_FUNCTION (this << cdfs.toString());
+        //NS_LOG_FUNCTION (this << cdfs.toString());
         const std::string resource = cdfs.getPayloadId();
 
         bool isManaged=false;
@@ -92,12 +92,12 @@ namespace ns3 {
 
 
     bool GwApplication::HandleClientConnectionRequest(Ptr<Socket> socket, const Address &from) {
-        NS_LOG_FUNCTION (this);
+        //NS_LOG_FUNCTION (this);
         return true;
     }
 
     void GwApplication::HandleClientAccept(Ptr<Socket> socket, const Address &from) {
-        NS_LOG_FUNCTION (this);
+        //NS_LOG_FUNCTION (this);
         socket->SetRecvCallback(MakeCallback(&GwApplication::HandleClientDownloadQuery, this));
 
     }
@@ -124,7 +124,7 @@ namespace ns3 {
         m_configurationSocket->SetRecvCallback(MakeCallback(&GwApplication::HandleUpdatedConfiguration, this));
 
 
-        NS_LOG_FUNCTION (this << "callbacks registered");
+        //NS_LOG_FUNCTION (this << "callbacks registered");
     }
 
     void GwApplication::HandlePeerClose(Ptr<Socket> socket) {
@@ -144,13 +144,13 @@ namespace ns3 {
 
 
     void GwApplication::triggerDownloadFromPOP(std::string const resource) {
-        NS_LOG_FUNCTION (this);
+        NS_LOG_FUNCTION (this << Simulator::Now().GetSeconds());
 
         this->triggerDownload(m_signalingPOPAddr, resource);
     }
 
     void GwApplication::triggerDownloadFromCP(std::string const resource) {
-        NS_LOG_FUNCTION (this);
+        NS_LOG_FUNCTION (this << Simulator::Now().GetSeconds());
 
         this->triggerDownload(m_signalingCPAddr, resource);
     }
@@ -169,7 +169,7 @@ namespace ns3 {
 
     void GwApplication::notifyPOP(std::string const resource) {
 
-        NS_LOG_FUNCTION (this << resource << resource.c_str() << resource.length());
+        //NS_LOG_FUNCTION (this << resource << resource.c_str() << resource.length());
 
 
         Ptr<Packet> packet = Create<Packet>((uint8_t *) (resource.c_str()),
@@ -180,7 +180,7 @@ namespace ns3 {
     }
 
     void GwApplication::HandleUpdatedConfiguration(Ptr<Socket> socket) {
-        NS_LOG_FUNCTION (this);
+        //NS_LOG_FUNCTION (this);
         Ptr<Packet> data = socket->Recv();
         std::ostringstream ss;
 
@@ -200,10 +200,10 @@ namespace ns3 {
 
 
     void GwApplication::dumpConf() {
-        NS_LOG(LOG_LEVEL_DEBUG, "GW Conf is");
+        //NS_LOG(LOG_LEVEL_DEBUG, "GW Conf is");
         for (std::vector<std::string>::const_iterator it = m_handlerResources.begin();
              it != m_handlerResources.end(); ++it) {
-            NS_LOG(LOG_LEVEL_DEBUG, *it);
+            //NS_LOG(LOG_LEVEL_DEBUG, *it);
             std::cout << *it << std::endl;
 
         }
