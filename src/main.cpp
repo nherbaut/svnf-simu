@@ -35,6 +35,7 @@
 #include <boost/uuid/uuid_io.hpp>
 #include <boost/uuid/uuid.hpp>
 #include "commons.h"
+#include <iomanip>
 
 //
 // CLIENT --- GW---- \
@@ -759,7 +760,7 @@ main(int argc, char *argv[]) {
         }
 
 
-        ofs << i << "\t" << cpValue << "\t" << popValue << "\t" << count_dropped << "\t" << totalVidCountMap[i]  << "\t"  << count_dropped_POP << "\t" << count_dropped_CP  <<
+        ofs << i << "\t" << std::setprecision(3) << std::setw(10) << cpValue << "\t" << popValue << "\t" << count_dropped << "\t" << totalVidCountMap[i]  << "\t"  << count_dropped_POP << "\t" << count_dropped_CP  <<
         std::endl;
 
 

@@ -27,7 +27,7 @@ set title "Requested Videos"
 
 set ylabel "# of requests per seconds"
 
-set yrange [0:600]
+set yrange [0:30	]
 set y2range [0:600]
 set origin 0.0,0.5
 
@@ -37,7 +37,7 @@ set origin 0.0,0.5
 ##############""
 set key top left
 plot sum=init(0),datafile using 1:5   axes x1y1 title  "Request per seconds" with lines lt rgb "black"  , \
-datafile using 1:((sum = sum + $5))   axes x1y1  title  "cumulated Requests" lt rgb "black"  dashtype '..' with lines,
+#datafile using 1:((sum = sum + $5))   axes x1y1  title  "cumulated Requests" lt rgb "black"  dashtype '..' with lines,
 
 set linestyle  1 lt 1 lc 7 # black-solid
 
