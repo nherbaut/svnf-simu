@@ -761,14 +761,15 @@ main(int argc, char *argv[]) {
         }
 
 
-        ofs << i << "\t" << std::setprecision(3) << std::setw(10)
-        << cpValue << "\t"              //2
-        << popValue << "\t"             //3
-        << count_dropped << "\t"        //4
-        << totalVidCountMap[i]  << "\t" //5
-        << count_dropped_POP << "\t"    //6
-        << count_dropped_CP  <<         //7
-        std::endl;
+        ofs
+        << std::setprecision(3) << std::setw(10) << std::setfill(' ') << i << "\t"
+        << std::setprecision(3) << std::setw(10) << std::setfill(' ') << cpValue << "\t"
+        << std::setprecision(3) << std::setw(10) << std::setfill(' ') << popValue << "\t"
+        << std::setprecision(3) << std::setw(10) << std::setfill(' ') << count_dropped  << "\t"
+        << std::setprecision(3) << std::setw(10) << std::setfill(' ') << totalVidCountMap[i]  << "\t"
+        << std::setprecision(3) << std::setw(10) << std::setfill(' ') << count_dropped_POP  << "\t"
+        << std::setprecision(3) << std::setw(10) << std::setfill(' ') << count_dropped_CP << std::endl;
+
 
 
     }
